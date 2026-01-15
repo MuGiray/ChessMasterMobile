@@ -4,16 +4,23 @@ namespace Chess.Core.Models
 {
     public class Board
     {
-        // 8x8 Grid. 1D Array de kullanılabilir (performans için), ancak şimdilik 2D okunabilirliği seçiyoruz.
-        private readonly Piece[,] _grid; 
+       private readonly Piece[,] _grid; 
         public const int Size = 8;
         
         public PieceColor Turn { get; set; }
+        
+        // YENİ ÖZELLİKLER
+        public CastlingRights CurrentCastlingRights { get; set; }
+        public Vector2Int? EnPassantSquare { get; set; } // Null olabilir (Eğer yoksa)
+        public int HalfMoveClock { get; set; } // 50 hamle kuralı için
+        public int FullMoveNumber { get; set; } // Hamle sayısı
 
         public Board()
         {
             _grid = new Piece[Size, Size];
             Turn = PieceColor.White;
+            CurrentCastlingRights = CastlingRights.All;
+            EnPassantSquare = null;
         }
 
         public Piece GetPieceAt(Vector2Int coords)

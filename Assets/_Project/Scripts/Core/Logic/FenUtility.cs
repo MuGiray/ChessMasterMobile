@@ -6,25 +6,56 @@ namespace Chess.Core.Logic
     public static class FenUtility
     {
         // Standart Başlangıç Pozisyonu
+        // Standart FEN (Tam hali)
         public const string StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
         public static void LoadPositionFromFen(Board board, string fen)
         {
-            // 1. Tahtayı temizle
             board.Clear();
-
             string[] sections = fen.Split(' ');
             
-            // BÖLÜM 1: Taş Yerleşimi
+            // 1. Taşlar
             LoadPiecePlacement(board, sections[0]);
 
-            // BÖLÜM 2: Sıra Kimde (w/b)
-            if (sections.Length > 1)
+            // 2. Sıra
+            board.Turn = (sections.Length > 1 && sections[1] == "b") ? PieceColor.Black : PieceColor.White;
+
+            // 3. Rok Hakları (Castling)
+            board.CurrentCastlingRights = CastlingRights.None;
+            if (sections.Length > 2 && sections[2] != "-")
             {
-                board.Turn = (sections[1] == "w") ? PieceColor.White : PieceColor.Black;
+                if (sections[2].Contains("K")) board.CurrentCastlingRights |= CastlingRights.WhiteKingSide;
+                if (sections[2].Contains("Q")) board.CurrentCastlingRights |= CastlingRights.WhiteQueenSide;
+                if (sections[2].Contains("k")) board.CurrentCastlingRights |= CastlingRights.BlackKingSide;
+                if (sections[2].Contains("q")) board.CurrentCastlingRights |= CastlingRights.BlackQueenSide;
             }
-            
-            // (İleride Castling ve EnPassant verileri de buradan okunacak)
+
+            // 4. En Passant Karesi
+            board.EnPassantSquare = null;
+            if (sections.Length > 3 && sections[3] != "-")
+            {
+                // Örn: "e3" -> Vector2Int
+                string epString = sections[3];
+                int file = epString[0] - 'a';
+                int rank = epString[1] - '1';
+                board.EnPassantSquare = new Vector2Int(file, rank);
+            }
+
+            // 5. Half Move (50 Hamle Kuralı)
+            int halfMove = 0; // Varsayılan değer
+            if (sections.Length > 4) 
+            {
+                int.TryParse(sections[4], out halfMove);
+            }
+            board.HalfMoveClock = halfMove;
+
+            // 6. Full Move (Hamle Sayısı)
+            int fullMove = 1; // Varsayılan değer 1'dir
+            if (sections.Length > 5) 
+            {
+                int.TryParse(sections[5], out fullMove);
+            }
+            board.FullMoveNumber = fullMove;
         }
 
         private static void LoadPiecePlacement(Board board, string data)

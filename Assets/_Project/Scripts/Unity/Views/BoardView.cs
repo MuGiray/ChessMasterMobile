@@ -15,16 +15,18 @@ namespace Chess.Unity.Views
         [SerializeField] private TileView _tilePrefab; // Prefab referansı
         [SerializeField] private PieceView _piecePrefab; // YENİ
         [SerializeField] private PieceTheme _currentTheme; // YENİ
-        [SerializeField] private GameObject _highlightPrefab; // YENİ: Yeşil nokta prefabı
+        [SerializeField] private GameObject _highlightPrefab; // Yeşil nokta prefabı
+        [SerializeField] private GameObject _capturePrefab;   // Kırmızı Çerçeve
         
         [Header("Settings")]
         [SerializeField] private Color _lightColor = new Color(0.9f, 0.9f, 0.9f);
         [SerializeField] private Color _darkColor = new Color(0.3f, 0.3f, 0.3f);
         [SerializeField] private Transform _boardContainer; // Hiyerarşide kirlilik olmasın diye parent
-        [SerializeField] private Transform _piecesContainer; // YENİ: Taşları ayrı bir objede toplayalım
+        [SerializeField] private Transform _piecesContainer; // Taşları ayrı bir objede toplayalım
 
         // POOLING SİSTEMİ: Çöp üretmemek için objeleri saklıyoruz.
         private List<GameObject> _highlightPool = new List<GameObject>();
+        private List<GameObject> _capturePool = new List<GameObject>();
 
         private void Update()
         {
@@ -146,30 +148,50 @@ namespace Chess.Unity.Views
             }
         }
 
-        // YENİ METOD: Hamleleri ekranda göster
-        public void HighlightMoves(List<CoreVector2Int> moves)
+        // GÜNCELLENEN METOD: Artık iki liste alıyor
+        public void HighlightMoves(List<CoreVector2Int> moves, List<CoreVector2Int> captures)
         {
-            HideHighlights(); // Önce eskileri gizle
+            HideHighlights(); // Önce temizle
 
+            // 1. Normal Hamleler (Yeşil Nokta)
             foreach (var move in moves)
             {
-                GameObject hl = GetHighlightObject();
+                GameObject hl = GetObjectFromPool(_highlightPool, _highlightPrefab);
                 hl.SetActive(true);
-                // Z = -2 yaparak taşların (-1) da üzerinde görünmesini sağlıyoruz.
-                hl.transform.position = new Vector3(move.x, move.y, -2); 
+                hl.transform.position = new Vector3(move.x, move.y, -2);
+            }
+
+            // 2. Yeme Hamleleri (Kırmızı Çerçeve)
+            foreach (var cap in captures)
+            {
+                GameObject capObj = GetObjectFromPool(_capturePool, _capturePrefab);
+                capObj.SetActive(true);
+                // Çerçevenin taşın ÖNÜNDE görünmesi için Z değerini ve Sorting Order'ı ayarlayacağız.
+                // Kod tarafında Z: -2 yeterli ama Prefab ayarı (Order in Layer) asıl belirleyici olacak.
+                capObj.transform.position = new Vector3(cap.x, cap.y, -2);
             }
         }
 
-        // YENİ METOD: Hepsini havuza geri gönder (Pasif yap)
+        // Hepsini havuza geri gönder (Pasif yap)
         public void HideHighlights()
         {
-            foreach (var hl in _highlightPool)
-            {
-                hl.SetActive(false);
-            }
+            foreach (var hl in _highlightPool) hl.SetActive(false);
+            foreach (var cap in _capturePool) cap.SetActive(false);
         }
 
-        // YENİ METOD: Havuz Yönetimi
+        // YENİ YARDIMCI METOD (Generic Pool Manager)
+        private GameObject GetObjectFromPool(List<GameObject> pool, GameObject prefab)
+        {
+            foreach (var item in pool)
+            {
+                if (!item.activeInHierarchy) return item;
+            }
+            GameObject newItem = Instantiate(prefab, _boardContainer); // TilesContainer altında dursunlar
+            pool.Add(newItem);
+            return newItem;
+        }
+
+        // Havuz Yönetimi
         private GameObject GetHighlightObject()
         {
             // 1. Havuzda pasif duran var mı? Varsa onu ver.
