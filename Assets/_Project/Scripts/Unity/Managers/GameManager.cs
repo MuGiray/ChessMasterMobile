@@ -4,6 +4,8 @@ using Chess.Core.Models;
 using Chess.Architecture.Commands;
 using Chess.Core.Logic;
 using Vector2Int = Chess.Core.Models.Vector2Int;
+using System.Threading.Tasks; // Task için gerekli
+using Chess.Core.AI; // AI için gerekli
 
 namespace Chess.Unity.Managers
 {
@@ -13,6 +15,9 @@ namespace Chess.Unity.Managers
 
         private Board _board;
         private Stack<ICommand> _commandHistory;
+        // YENİ: AI Kontrolcüsü
+        private ChessAI _aiOpponent;
+        private bool _isAIThinking = false; // AI düşünürken oyuncu hamle yapamasın
 
         [SerializeField] private Views.BoardView _boardView;
         [SerializeField] private UIManager _uiManager;
@@ -40,6 +45,8 @@ namespace Chess.Unity.Managers
 
             // YENİ BAŞLANGIÇ: FEN YÜKLEME
             LoadGame(FenUtility.StartFen);
+
+            _aiOpponent = new ChessAI(); // AI'yı başlat
             
             Debug.Log("Game Core Initialized. Standard Board Loaded.");
         }
@@ -94,8 +101,12 @@ namespace Chess.Unity.Managers
 
         public void OnSquareSelected(Vector2Int coords)
         {
-            // INPUT KİLİDİ: Oyun devam etmiyorsa tıklamayı yoksay
-            if (_currentGameState != GameState.InProgress) return;
+            // INPUT KİLİDİ GÜNCELLEMESİ:
+            // Oyun bitmişse VEYA AI düşünüyorsa dokunmayı engelle.
+            if (_currentGameState != GameState.InProgress || _isAIThinking) return;
+            
+            // Eğer sıra Siyahtaysa (AI'nın sırası) oyuncunun dokunmasını engelle (Çift güvenlik)
+            if (_board.Turn == PieceColor.Black) return;
 
             // 1. Durum: Hiçbir taş seçili değilse -> SEÇ
             if (_selectedSquare.x == -1)
@@ -184,9 +195,11 @@ namespace Chess.Unity.Managers
         public void ExecuteMove(Vector2Int from, Vector2Int to)
         {
             Piece movedPiece = _board.GetPieceAt(from);
-
             // 1. Rakip taş var mı? Varsa görsel olarak sil.
             Piece targetPiece = _board.GetPieceAt(to);
+
+            bool isCapture = targetPiece.Type != PieceType.None;
+
             if (targetPiece.Type != PieceType.None)
             {
                 _boardView.RemovePieceVisual(to);
@@ -210,6 +223,15 @@ namespace Chess.Unity.Managers
                 _boardView.MovePieceVisual(rookFrom, rookTo);
             }
 
+            if (isCapture)
+            {
+                AudioManager.Instance.PlayCapture();
+            }
+            else
+            {
+                AudioManager.Instance.PlayMove();
+            }
+
             // --- MANTIKSAL İŞLEMLER ---
             
             // 3. Command Pattern ile Model'i güncelle
@@ -219,6 +241,45 @@ namespace Chess.Unity.Managers
 
             Debug.Log($"Move Executed. Turn is now: {_board.Turn}");
             CheckGameState();
+            // HAMLE BİTTİ, SIRA DEĞİŞTİ. ŞİMDİ KİMDE?
+            if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black)
+            {
+                // Sıra Siyah'a (AI) geçti. Düşünmeye başla.
+                // UI Thread'i kilitlememek için asenkron çağırıyoruz ama 'await' kullanmak için 
+                // bu metodu async yapamayız (Unity Event sistemi sevmez).
+                // O yüzden "Fire and Forget" yapacağız ama _isAIThinking flag'i ile koruyacağız.
+                StartCoroutine(TriggerAI());
+            }
+        }
+
+        // YENİ: AI Tetikleyici (Coroutine)
+        private System.Collections.IEnumerator TriggerAI()
+        {
+            _isAIThinking = true;
+            Debug.Log("AI Thinking...");
+
+            // AI'nın hamlesini bekle (Arka planda hesaplasın)
+            Task<Vector2Int[]> aiTask = _aiOpponent.GetBestMoveAsync(_board);
+            
+            // Task bitene kadar bekle (Unity donmaz)
+            while (!aiTask.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (aiTask.Result != null)
+            {
+                Vector2Int aiFrom = aiTask.Result[0];
+                Vector2Int aiTo = aiTask.Result[1];
+                
+                // AI'nın hamlesini oynat!
+                // Not: Burası recursion olmaması için ExecuteMove'u dikkatli çağırmalıyız
+                // Ama ExecuteMove içinde "Turn == Black" kontrolü var, AI oynadıktan sonra sıra Beyaz'a geçeceği için sorun yok.
+                ExecuteMove(aiFrom, aiTo);
+            }
+
+            _isAIThinking = false;
+            Debug.Log("AI Move Complete.");
         }
 
         private void CheckGameState()
@@ -228,21 +289,20 @@ namespace Chess.Unity.Managers
 
             if (state == GameState.Checkmate)
             {
-                // HATA AYIKLAMA LOGLARI
-                Debug.Log($"!!! MAT TESPİT EDİLDİ !!!");
-                Debug.Log($"Şu an Sıra (Mata kalan taraf): {_board.Turn}");
-
-                // Mantık: Eğer sıra Beyazda ise ve Mat olduysa, Siyah kazanmıştır.
-                string winner = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
+                AudioManager.Instance.PlayGameOver(); // YENİ: Bitiş Sesi
                 
+                string winner = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
                 Debug.Log($"Kazanan: {winner}");
                 _uiManager.ShowGameOver(winner);
             }
             else if (state == GameState.Stalemate)
             {
-                Debug.Log("!!! STALEMATE !!!");
+                AudioManager.Instance.PlayGameOver(); // YENİ
                 _uiManager.ShowGameOver("DRAW (Stalemate)");
             }
+            // Şah çekme sesi (Opsiyonel):
+            // Eğer mat değilse ama Şah tehdit altındaysa 'PlayNotify' çalınabilir.
+            // Bunu kontrol etmek için Arbiter'a "IsCheck" sorusu sormamız gerekir.
         }
     }
 }
