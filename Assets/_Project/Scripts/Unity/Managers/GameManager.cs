@@ -25,6 +25,7 @@ namespace Chess.Unity.Managers
         private Board _board;
         private Stack<ICommand> _commandHistory;
         private ChessAI _aiOpponent;
+        private string _initialFen;
 
         // State
         private GameState _currentGameState = GameState.InProgress;
@@ -58,50 +59,36 @@ namespace Chess.Unity.Managers
 
             _aiOpponent = new ChessAI();
 
-            // --- SAVE SYSTEM ENTEGRASYONU ---
             if (SaveManager.HasSave())
             {
-                Debug.Log("Save file found. Loading...");
+                Debug.Log("Save file found. Replaying History...");
                 SaveData data = SaveManager.Load();
                 
                 if (data != null)
                 {
-                    // Modu geri yükle
                     GameSettings.CurrentMode = data.CurrentMode;
-                    // Tahtayı geri yükle
-                    LoadGame(data.FenString);
+                    // REPLAY MODU: Kayıtlı oyunu tekrar oynat
+                    ReplayGame(data);
                 }
                 else
                 {
-                    // Dosya bozuksa sıfırdan başla
                     LoadGame(FenUtility.StartFen);
                 }
             }
             else
             {
-                // Kayıt yoksa sıfırdan başla
                 LoadGame(FenUtility.StartFen);
             }
-            // --------------------------------
         }
 
         private void LoadGame(string fen)
         {
-            FenUtility.LoadPositionFromFen(_board, fen);
+            _initialFen = fen; // Başlangıç noktamızı hatırla
             
-            _boardView.ClearPieces();
-
-            for (int x = 0; x < 8; x++)
-            {
-                for (int y = 0; y < 8; y++)
-                {
-                    Piece piece = _board.GetPieceAt(new Vector2Int(x, y));
-                    if (piece.Type != PieceType.None)
-                    {
-                        _boardView.PlacePiece(new Vector2Int(x, y), piece);
-                    }
-                }
-            }
+            FenUtility.LoadPositionFromFen(_board, fen);
+            RefreshBoardVisuals(); // Görseli güncelle
+            
+            Debug.Log("Game Loaded from FEN.");
         }
 
         public void RestartGame()
@@ -126,6 +113,53 @@ namespace Chess.Unity.Managers
             LoadGame(FenUtility.StartFen);
             // Temiz başlangıcı hemen kaydet (İsteğe bağlı, ama güvenli)
             SaveCurrentGame();
+        }
+
+        private void ReplayGame(SaveData data)
+        {
+            // 1. Tahtayı BAŞLANGIÇ konumuna getir (SaveData'daki InitialFen)
+            // Eğer save eski versiyonsa ve InitialFen yoksa StartFen kullan.
+            string startFen = string.IsNullOrEmpty(data.InitialFen) ? FenUtility.StartFen : data.InitialFen;
+            
+            _initialFen = startFen;
+            FenUtility.LoadPositionFromFen(_board, startFen);
+            
+            // 2. Hamleleri sırayla tekrar oyna (MANTIK ONLY)
+            if (data.MoveHistory != null)
+            {
+                foreach (var moveRec in data.MoveHistory)
+                {
+                    // Komutu oluştur
+                    ICommand cmd = new MoveCommand(_board, moveRec.From, moveRec.To, moveRec.Promotion);
+                    
+                    // Çalıştır (Bu board state'i günceller)
+                    cmd.Execute();
+                    
+                    // Geçmişe ekle (Böylece Undo çalışır!)
+                    _commandHistory.Push(cmd);
+                    
+                    // Yenen taş varsa UI'a ekle (Görsel tutarlılık için)
+                    MoveCommand mCmd = cmd as MoveCommand;
+                    if (mCmd != null && mCmd.CapturedPiece.Type != PieceType.None)
+                    {
+                        _capturedPiecesUI.AddCapturedPiece(mCmd.CapturedPiece);
+                    }
+                    // En Passant UI da eklenebilir ama Load hızı için kritik değil, 
+                    // Undo yapınca zaten düzelecek.
+                }
+            }
+
+            // 3. Görseli SON haliye güncelle
+            RefreshBoardVisuals();
+            
+            // 4. Son hamle sarı çerçevesini koy
+            if (data.MoveHistory != null && data.MoveHistory.Count > 0)
+            {
+                var lastMove = data.MoveHistory[data.MoveHistory.Count - 1];
+                _boardView.HighlightLastMove(lastMove.From, lastMove.To);
+            }
+
+            Debug.Log($"Replay Complete. {data.MoveHistory?.Count} moves restored.");
         }
 
         #region Input & Movement
@@ -452,17 +486,33 @@ namespace Chess.Unity.Managers
 
         private void SaveCurrentGame()
         {
-            // Oyun bittiyse kaydı sil (Yeni oyun için temiz sayfa)
             if (_currentGameState == GameState.Checkmate || _currentGameState == GameState.Stalemate)
             {
                 SaveManager.DeleteSave();
                 return;
             }
 
+            // Command Stack (LIFO) -> List (Chronological)
+            // Stack'i Array yapınca ters sıra gelir (En son yapılan hamle [0] olur).
+            // Replay için ESKİDEN YENİYE sıralamalıyız.
+            ICommand[] stackArray = _commandHistory.ToArray();
+            List<MoveRecord> historyList = new List<MoveRecord>();
+
+            // Tersten döngü (En eskiden en yeniye)
+            for (int i = stackArray.Length - 1; i >= 0; i--)
+            {
+                MoveCommand cmd = stackArray[i] as MoveCommand;
+                if (cmd != null)
+                {
+                    historyList.Add(new MoveRecord(cmd.From, cmd.To, cmd.PromotionType));
+                }
+            }
+
             SaveData data = new SaveData
             {
-                FenString = FenUtility.GenerateFenFromBoard(_board),
-                CurrentMode = GameSettings.CurrentMode
+                InitialFen = _initialFen, // Başlangıç noktasını kaydet
+                CurrentMode = GameSettings.CurrentMode,
+                MoveHistory = historyList
             };
             SaveManager.Save(data);
         }

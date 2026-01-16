@@ -1,4 +1,3 @@
-using System;
 using Chess.Core.Models;
 
 namespace Chess.Architecture.Commands
@@ -14,8 +13,15 @@ namespace Chess.Architecture.Commands
         private readonly Board _board;
         private readonly Vector2Int _from;
         private readonly Vector2Int _to;
-        
-        // State Snapshot (Undo için)
+        private readonly PieceType _promotionType; // Terfi tipi
+
+        // DIŞ ERİŞİM İÇİN PROPERTY'LER (YENİ)
+        public Vector2Int From => _from;
+        public Vector2Int To => _to;
+        public PieceType PromotionType => _promotionType;
+        public Piece CapturedPiece => _capturedPiece; // Undo UI için lazımdı
+
+        // State Snapshot
         private readonly Piece _movedPiece;
         private readonly Piece _capturedPiece;
         private readonly CastlingRights _oldCastlingRights;
@@ -24,21 +30,16 @@ namespace Chess.Architecture.Commands
 
         private bool _isEnPassantMove;
 
-        // YENİ: Dönüşülecek taş türü (Varsayılan: Vezir)
-        private readonly PieceType _promotionType;
-
-        // YENİ: Dışarıdan okumak için Property
-        public Piece CapturedPiece => _capturedPiece;
-
-        // Constructor güncellendi: promotionType parametresi eklendi
+        // Constructor (Step 22'deki gibi promotionType parametreli)
         public MoveCommand(Board board, Vector2Int from, Vector2Int to, PieceType promotionType = PieceType.Queen)
         {
             _board = board;
             _from = from;
             _to = to;
+            _promotionType = promotionType;
+
             _movedPiece = board.GetPieceAt(from);
             _capturedPiece = board.GetPieceAt(to);
-            _promotionType = promotionType; // Kaydet
             
             _oldCastlingRights = board.CurrentCastlingRights;
             _oldEnPassantSquare = board.EnPassantSquare;
@@ -47,7 +48,7 @@ namespace Chess.Architecture.Commands
 
         public void Execute()
         {
-            // 1. Move
+            // 1. Standart Taşıma
             _board.MovePiece(_from, _to);
 
             // 2. En Passant Capture
@@ -59,16 +60,16 @@ namespace Chess.Architecture.Commands
                 _board.SetPieceAt(capturedPawnPos, new Piece(PieceType.None, PieceColor.None));
             }
 
-            // 3. Promotion (GÜNCELLENDİ)
-            // Artık sabit Queen değil, _promotionType kullanıyoruz.
+            // 3. Promotion (Seçilen türe göre)
             int lastRank = _movedPiece.IsWhite ? 7 : 0;
             if (_movedPiece.Type == PieceType.Pawn && _to.y == lastRank)
             {
+                // _promotionType kullanıyoruz
                 _board.SetPieceAt(_to, new Piece(_promotionType, _movedPiece.Color));
             }
 
             // 4. Castling
-            if (_movedPiece.Type == PieceType.King && Math.Abs(_from.x - _to.x) == 2)
+            if (_movedPiece.Type == PieceType.King && System.Math.Abs(_from.x - _to.x) == 2)
             {
                 int rank = _movedPiece.IsWhite ? 0 : 7;
                 bool isKingSide = _to.x > _from.x; 
@@ -76,8 +77,6 @@ namespace Chess.Architecture.Commands
                 Vector2Int rookTo = isKingSide ? new Vector2Int(5, rank) : new Vector2Int(3, rank);
                 
                 _board.MovePiece(rookFrom, rookTo);
-                
-                // Kale hareketi sırayı değiştirdiği için geri düzeltiyoruz
                 _board.Turn = (_board.Turn == PieceColor.White) ? PieceColor.Black : PieceColor.White;
             }
 
@@ -100,13 +99,12 @@ namespace Chess.Architecture.Commands
             }
 
             // 3. Revert Castling
-            if (_movedPiece.Type == PieceType.King && Math.Abs(_from.x - _to.x) == 2)
+            if (_movedPiece.Type == PieceType.King && System.Math.Abs(_from.x - _to.x) == 2)
             {
                 int rank = _movedPiece.IsWhite ? 0 : 7;
                 bool isKingSide = _to.x > _from.x;
                 Vector2Int rookFrom = isKingSide ? new Vector2Int(7, rank) : new Vector2Int(0, rank);
                 Vector2Int rookTo = isKingSide ? new Vector2Int(5, rank) : new Vector2Int(3, rank);
-                
                 Piece rook = _board.GetPieceAt(rookTo);
                 _board.SetPieceAt(rookFrom, rook);
                 _board.SetPieceAt(rookTo, new Piece(PieceType.None, PieceColor.None));
@@ -123,14 +121,12 @@ namespace Chess.Architecture.Commands
         {
             _board.EnPassantSquare = null;
 
-            // Set En Passant
-            if (_movedPiece.Type == PieceType.Pawn && Math.Abs(_from.y - _to.y) == 2)
+            if (_movedPiece.Type == PieceType.Pawn && System.Math.Abs(_from.y - _to.y) == 2)
             {
                 int direction = _movedPiece.IsWhite ? 1 : -1;
                 _board.EnPassantSquare = new Vector2Int(_from.x, _from.y + direction);
             }
 
-            // Update Castling Rights
             if (_movedPiece.Type == PieceType.King)
             {
                 if (_movedPiece.IsWhite) _board.CurrentCastlingRights &= ~(CastlingRights.WhiteKingSide | CastlingRights.WhiteQueenSide);
