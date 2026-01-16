@@ -15,8 +15,11 @@ namespace Chess.Unity.Views
         [SerializeField] private TileView _tilePrefab; // Prefab referansı
         [SerializeField] private PieceView _piecePrefab; // YENİ
         [SerializeField] private PieceTheme _currentTheme; // YENİ
+
+        [Header("Highlights")]
         [SerializeField] private GameObject _highlightPrefab; // Yeşil nokta prefabı
         [SerializeField] private GameObject _capturePrefab;   // Kırmızı Çerçeve
+        [SerializeField] private GameObject _lastMovePrefab;  // Sarı Çerçeve
         
         [Header("Settings")]
         [SerializeField] private Color _lightColor = new Color(0.9f, 0.9f, 0.9f);
@@ -27,6 +30,8 @@ namespace Chess.Unity.Views
         // POOLING SİSTEMİ: Çöp üretmemek için objeleri saklıyoruz.
         private List<GameObject> _highlightPool = new List<GameObject>();
         private List<GameObject> _capturePool = new List<GameObject>();
+        // YENİ: Son hamle için 2 adet obje tutacağımız dizi (Başlangıç ve Bitiş)
+        private GameObject[] _lastMoveObjects = new GameObject[2];
 
         private void Update()
         {
@@ -146,6 +151,32 @@ namespace Chess.Unity.Views
                     tile.SetColor(isLight ? _lightColor : _darkColor);
                 }
             }
+        }
+
+        public void HighlightLastMove(CoreVector2Int from, CoreVector2Int to)
+        {
+            // Eğer objeler henüz yaratılmadıysa yarat
+            if (_lastMoveObjects[0] == null)
+            {
+                // DÜZELTME: _tilesContainer yerine _boardContainer kullanıyoruz
+                _lastMoveObjects[0] = Instantiate(_lastMovePrefab, _boardContainer);
+                _lastMoveObjects[1] = Instantiate(_lastMovePrefab, _boardContainer);
+            }
+
+            // 1. Objeleri Aktif Et
+            _lastMoveObjects[0].SetActive(true);
+            _lastMoveObjects[1].SetActive(true);
+
+            // 2. Pozisyonlarına Işınla
+            _lastMoveObjects[0].transform.position = new Vector3(from.x, from.y, 0);
+            _lastMoveObjects[1].transform.position = new Vector3(to.x, to.y, 0);
+        }
+
+        // --- YENİ METOD: SON HAMLEYİ GİZLE (Restart için) ---
+        public void HideLastMoveHighlights()
+        {
+            if (_lastMoveObjects[0] != null) _lastMoveObjects[0].SetActive(false);
+            if (_lastMoveObjects[1] != null) _lastMoveObjects[1].SetActive(false);
         }
 
         // GÜNCELLENEN METOD: Artık iki liste alıyor

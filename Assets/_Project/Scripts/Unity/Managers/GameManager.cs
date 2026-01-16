@@ -92,6 +92,8 @@ namespace Chess.Unity.Managers
             _selectedSquare = new Vector2Int(-1, -1);
             _validMoves.Clear();
             _boardView.HideHighlights();
+            // YENİ: Sarı çerçeveleri de sil
+            _boardView.HideLastMoveHighlights();
             
             // 3. Oyunu yeniden yükle (FEN)
             LoadGame(FenUtility.StartFen);
@@ -209,6 +211,9 @@ namespace Chess.Unity.Managers
             
             // A. Ana Taşı Oynat
             _boardView.MovePieceVisual(from, to);
+            // YENİ: Son Hamleyi Sarı Çerçeve ile Göster
+            _boardView.HighlightLastMove(from, to); 
+            // -------------------------------------
 
             // B. ÖZEL DURUM: ROK (Görsel)
             if (movedPiece.Type == PieceType.King && Mathf.Abs(from.x - to.x) == 2)
@@ -256,30 +261,34 @@ namespace Chess.Unity.Managers
         private System.Collections.IEnumerator TriggerAI()
         {
             _isAIThinking = true;
-            Debug.Log("AI Thinking...");
+            // Debug.Log("AI Thinking..."); // İstersen bu logu kapatabilirsin
 
-            // AI'nın hamlesini bekle (Arka planda hesaplasın)
+            // 1. AI Hesaplamayı Başlat (Arka planda)
             Task<Vector2Int[]> aiTask = _aiOpponent.GetBestMoveAsync(_board);
             
-            // Task bitene kadar bekle (Unity donmaz)
+            // 2. Hesaplama bitene kadar bekle
             while (!aiTask.IsCompleted)
             {
                 yield return null;
             }
+
+            // --- EKLEME: İNSANİ GECİKME ---
+            // Hesap bitse bile, oyuncunun algılaması için 1 saniye bekle.
+            // Bu süre içinde oyuncu kendi hamlesinin bittiğini rahatça görür.
+            yield return new WaitForSeconds(1.0f); 
+            // -----------------------------
 
             if (aiTask.Result != null)
             {
                 Vector2Int aiFrom = aiTask.Result[0];
                 Vector2Int aiTo = aiTask.Result[1];
                 
-                // AI'nın hamlesini oynat!
-                // Not: Burası recursion olmaması için ExecuteMove'u dikkatli çağırmalıyız
-                // Ama ExecuteMove içinde "Turn == Black" kontrolü var, AI oynadıktan sonra sıra Beyaz'a geçeceği için sorun yok.
+                // Hamleyi Oynat
                 ExecuteMove(aiFrom, aiTo);
             }
 
             _isAIThinking = false;
-            Debug.Log("AI Move Complete.");
+            // Debug.Log("AI Move Complete.");
         }
 
         private void CheckGameState()
