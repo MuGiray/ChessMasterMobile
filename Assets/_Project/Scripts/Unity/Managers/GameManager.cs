@@ -26,6 +26,7 @@ namespace Chess.Unity.Managers
         private Stack<ICommand> _commandHistory;
         private ChessAI _aiOpponent;
         private string _initialFen;
+        
 
         // State
         private GameState _currentGameState = GameState.InProgress;
@@ -33,6 +34,8 @@ namespace Chess.Unity.Managers
         private List<Vector2Int> _validMoves = new List<Vector2Int>();
 
         private bool _isPromotionActive = false;
+        // YENİ: Durdurma durumu
+        private bool _isPaused = false;
         
         // AI Control
         private bool _isAIThinking = false;
@@ -167,7 +170,7 @@ namespace Chess.Unity.Managers
         public void OnSquareSelected(Vector2Int coords)
         {
             // 1. Oyun bitmişse veya AI düşünüyorsa dokunma
-            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive) return;
+            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive || _isPaused) return;
 
             // 2. MOD KONTROLÜ (DÜZELTME BURADA)
             // Eğer oyun modu "Human vs AI" ise VE sıra Siyah'taysa (AI), oyuncunun dokunmasını engelle.
@@ -392,7 +395,7 @@ namespace Chess.Unity.Managers
         public void UndoMove()
         {
             // 1. Güvenlik Kontrolleri
-            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive) return;
+            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive || _isPaused) return;
 
             // 2. Mod Kontrolü
             if (GameSettings.CurrentMode == GameMode.HumanVsAI)
@@ -516,5 +519,40 @@ namespace Chess.Unity.Managers
             };
             SaveManager.Save(data);
         }
+
+        #region Pause & Menu System
+
+        public void TogglePause()
+        {
+            // Oyun bitmişse durdurmaya gerek yok
+            if (_currentGameState != GameState.InProgress) return;
+
+            _isPaused = !_isPaused;
+
+            if (_isPaused)
+            {
+                Time.timeScale = 0f; // ZAMANI DURDUR (Animasyonlar, Coroutine'ler durur)
+                _uiManager.ShowPause();
+            }
+            else
+            {
+                Time.timeScale = 1f; // ZAMANI AKIT
+                _uiManager.HidePause();
+            }
+        }
+
+        public void ReturnToMainMenu()
+        {
+            // 1. Zamanı normale döndür (Çok önemli!)
+            Time.timeScale = 1f;
+            
+            // 2. Oyunu Kaydet (Çıkarken son durum kalsın)
+            SaveCurrentGame();
+            
+            // 3. Menü Sahnesine Geç
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        }
+
+        #endregion
     }
 }
