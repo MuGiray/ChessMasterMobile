@@ -24,13 +24,18 @@ namespace Chess.Architecture.Commands
 
         private bool _isEnPassantMove;
 
-        public MoveCommand(Board board, Vector2Int from, Vector2Int to)
+        // YENİ: Dönüşülecek taş türü (Varsayılan: Vezir)
+        private readonly PieceType _promotionType;
+
+        // Constructor güncellendi: promotionType parametresi eklendi
+        public MoveCommand(Board board, Vector2Int from, Vector2Int to, PieceType promotionType = PieceType.Queen)
         {
             _board = board;
             _from = from;
             _to = to;
             _movedPiece = board.GetPieceAt(from);
             _capturedPiece = board.GetPieceAt(to);
+            _promotionType = promotionType; // Kaydet
             
             _oldCastlingRights = board.CurrentCastlingRights;
             _oldEnPassantSquare = board.EnPassantSquare;
@@ -51,11 +56,12 @@ namespace Chess.Architecture.Commands
                 _board.SetPieceAt(capturedPawnPos, new Piece(PieceType.None, PieceColor.None));
             }
 
-            // 3. Promotion (Auto Queen)
+            // 3. Promotion (GÜNCELLENDİ)
+            // Artık sabit Queen değil, _promotionType kullanıyoruz.
             int lastRank = _movedPiece.IsWhite ? 7 : 0;
             if (_movedPiece.Type == PieceType.Pawn && _to.y == lastRank)
             {
-                _board.SetPieceAt(_to, new Piece(PieceType.Queen, _movedPiece.Color));
+                _board.SetPieceAt(_to, new Piece(_promotionType, _movedPiece.Color));
             }
 
             // 4. Castling

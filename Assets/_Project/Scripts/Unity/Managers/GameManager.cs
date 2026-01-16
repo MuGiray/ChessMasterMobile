@@ -19,6 +19,7 @@ namespace Chess.Unity.Managers
         [SerializeField] private Views.BoardView _boardView;
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private CapturedPiecesUI _capturedPiecesUI;
+        [SerializeField] private PromotionUI _promotionUI;
 
         // Core Components
         private Board _board;
@@ -29,6 +30,8 @@ namespace Chess.Unity.Managers
         private GameState _currentGameState = GameState.InProgress;
         private Vector2Int _selectedSquare = new Vector2Int(-1, -1);
         private List<Vector2Int> _validMoves = new List<Vector2Int>();
+
+        private bool _isPromotionActive = false;
         
         // AI Control
         private bool _isAIThinking = false;
@@ -81,6 +84,11 @@ namespace Chess.Unity.Managers
         public void RestartGame()
         {
             _uiManager.HideGameOver();
+
+            // YENİ: Restart atılırsa paneli kapat ve kilidi aç
+            _promotionUI.Hide();
+            _isPromotionActive = false;
+
             _currentGameState = GameState.InProgress;
             
             DeselectPiece();
@@ -98,7 +106,7 @@ namespace Chess.Unity.Managers
         public void OnSquareSelected(Vector2Int coords)
         {
             // 1. Oyun bitmişse veya AI düşünüyorsa dokunma
-            if (_currentGameState != GameState.InProgress || _isAIThinking) return;
+            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive) return;
 
             // 2. MOD KONTROLÜ (DÜZELTME BURADA)
             // Eğer oyun modu "Human vs AI" ise VE sıra Siyah'taysa (AI), oyuncunun dokunmasını engelle.
@@ -170,31 +178,55 @@ namespace Chess.Unity.Managers
         public void ExecuteMove(Vector2Int from, Vector2Int to)
         {
             Piece movedPiece = _board.GetPieceAt(from);
+            
+            int lastRank = movedPiece.IsWhite ? 7 : 0;
+            bool isPromotion = (movedPiece.Type == PieceType.Pawn && to.y == lastRank);
+            
+            bool isHumanPlayer = (GameSettings.CurrentMode == GameMode.HumanVsHuman) || 
+                                 (GameSettings.CurrentMode == GameMode.HumanVsAI && _board.Turn == PieceColor.White);
+
+            if (isPromotion && isHumanPlayer)
+            {
+                _isPromotionActive = true; // KİLİTLE: Artık tahtaya tıklanamaz
+                
+                _promotionUI.Show(movedPiece.Color, (selectedType) => 
+                {
+                    _isPromotionActive = false; // KİLİDİ AÇ: Seçim yapıldı
+                    ExecuteConfirmedMove(from, to, selectedType);
+                });
+                return; 
+            }
+
+            ExecuteConfirmedMove(from, to, PieceType.Queen);
+        }
+
+        // Asıl işi yapan metod (Eski ExecuteMove içeriği buraya taşındı)
+        private void ExecuteConfirmedMove(Vector2Int from, Vector2Int to, PieceType promotionType)
+        {
+            Piece movedPiece = _board.GetPieceAt(from);
             Piece targetPiece = _board.GetPieceAt(to);
             bool isCapture = targetPiece.Type != PieceType.None;
 
-            // 1. Capture Handling
             if (isCapture)
             {
                 _capturedPiecesUI.AddCapturedPiece(targetPiece);
                 _boardView.RemovePieceVisual(to);
             }
 
-            // 2. En Passant Handling
+            // En Passant Görsel Silme
             if (movedPiece.Type == PieceType.Pawn && targetPiece.Type == PieceType.None && from.x != to.x)
             {
                 Vector2Int capturedPos = new Vector2Int(to.x, from.y);
                 Piece epPiece = _board.GetPieceAt(capturedPos);
-                
                 _capturedPiecesUI.AddCapturedPiece(epPiece);
                 _boardView.RemovePieceVisual(capturedPos);
             }
 
-            // 3. Visual Move
+            // GÖRSEL HAREKET
             _boardView.MovePieceVisual(from, to);
             _boardView.HighlightLastMove(from, to);
 
-            // 4. Castling Visuals
+            // CASTLING GÖRSELİ
             if (movedPiece.Type == PieceType.King && Mathf.Abs(from.x - to.x) == 2)
             {
                 int rank = from.y;
@@ -204,39 +236,30 @@ namespace Chess.Unity.Managers
                 _boardView.MovePieceVisual(rookFrom, rookTo);
             }
 
-            // 5. Audio
+            // SESLER
             if (isCapture) AudioManager.Instance.PlayCapture();
             else AudioManager.Instance.PlayMove();
 
-            // 6. Logic Execution
-            ICommand moveCmd = new MoveCommand(_board, from, to);
+            // --- COMMAND EXECUTION (Güncellendi) ---
+            // Seçilen promotionType'ı gönderiyoruz
+            ICommand moveCmd = new MoveCommand(_board, from, to, promotionType);
             moveCmd.Execute();
             _commandHistory.Push(moveCmd);
 
-            // --- VISUAL FIX: PROMOTION (Terfi Görseli Düzeltmesi) ---
-            // Logic diyor ki "Burası Vezir", ama Gözümüz (Visual) hala "Piyon" görüyor.
-            // Bunu tespit edip görseli yeniliyoruz.
+            // GÖRSEL DÜZELTME (Piyon -> Seçilen Taş)
             Piece pieceAfterMove = _board.GetPieceAt(to);
-
-            // Eğer oynanan taş Piyonduysa AMA şu anki taş Piyon değilse -> Terfi olmuştur!
             if (movedPiece.Type == PieceType.Pawn && pieceAfterMove.Type != PieceType.Pawn)
             {
-                _boardView.RemovePieceVisual(to);       // Eski Piyon görselini sil
-                _boardView.PlacePiece(to, pieceAfterMove); // Yeni Vezir görselini oluştur
+                _boardView.RemovePieceVisual(to);
+                _boardView.PlacePiece(to, pieceAfterMove);
             }
-            // --------------------------------------------------------
 
             CheckGameState();
 
-            // 7. AI Tetikleme Mantığı
-            if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black)
+            // AI TETİKLEME
+            if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black && GameSettings.CurrentMode == GameMode.HumanVsAI)
             {
-                // Sadece Yapay Zeka modundaysak AI'yı çalıştır
-                if (GameSettings.CurrentMode == GameMode.HumanVsAI)
-                {
-                    StartCoroutine(TriggerAI());
-                }
-                // HumanVsHuman modunda hiçbir şey yapma, diğer oyuncunun tıklamasını bekle.
+                StartCoroutine(TriggerAI());
             }
         }
 
