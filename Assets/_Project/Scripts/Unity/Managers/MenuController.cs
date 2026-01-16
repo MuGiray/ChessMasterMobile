@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Chess.Core.Models; // GameSettings erişimi için
 
 namespace Chess.Unity.Managers
 {
@@ -7,8 +8,17 @@ namespace Chess.Unity.Managers
     {
         private const string GAME_SCENE_NAME = "SampleScene";
 
-        public void PlayGame()
+        // BUTON 1: Yapay Zeka Modu
+        public void PlayVsAI()
         {
+            GameSettings.CurrentMode = GameMode.HumanVsAI;
+            SceneManager.LoadScene(GAME_SCENE_NAME);
+        }
+
+        // BUTON 2: Arkadaş Modu
+        public void PlayVsFriend()
+        {
+            GameSettings.CurrentMode = GameMode.HumanVsHuman;
             SceneManager.LoadScene(GAME_SCENE_NAME);
         }
 

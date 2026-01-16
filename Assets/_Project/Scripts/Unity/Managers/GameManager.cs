@@ -97,8 +97,13 @@ namespace Chess.Unity.Managers
 
         public void OnSquareSelected(Vector2Int coords)
         {
+            // 1. Oyun bitmişse veya AI düşünüyorsa dokunma
             if (_currentGameState != GameState.InProgress || _isAIThinking) return;
-            if (_board.Turn == PieceColor.Black) return;
+
+            // 2. MOD KONTROLÜ (DÜZELTME BURADA)
+            // Eğer oyun modu "Human vs AI" ise VE sıra Siyah'taysa (AI), oyuncunun dokunmasını engelle.
+            // Ama "Human vs Human" ise bu satır çalışmayacak ve Siyah oynayabilecek.
+            if (GameSettings.CurrentMode == GameMode.HumanVsAI && _board.Turn == PieceColor.Black) return;
 
             if (_selectedSquare.x == -1)
             {
@@ -208,12 +213,30 @@ namespace Chess.Unity.Managers
             moveCmd.Execute();
             _commandHistory.Push(moveCmd);
 
+            // --- VISUAL FIX: PROMOTION (Terfi Görseli Düzeltmesi) ---
+            // Logic diyor ki "Burası Vezir", ama Gözümüz (Visual) hala "Piyon" görüyor.
+            // Bunu tespit edip görseli yeniliyoruz.
+            Piece pieceAfterMove = _board.GetPieceAt(to);
+
+            // Eğer oynanan taş Piyonduysa AMA şu anki taş Piyon değilse -> Terfi olmuştur!
+            if (movedPiece.Type == PieceType.Pawn && pieceAfterMove.Type != PieceType.Pawn)
+            {
+                _boardView.RemovePieceVisual(to);       // Eski Piyon görselini sil
+                _boardView.PlacePiece(to, pieceAfterMove); // Yeni Vezir görselini oluştur
+            }
+            // --------------------------------------------------------
+
             CheckGameState();
 
-            // 7. Trigger AI if needed
+            // 7. AI Tetikleme Mantığı
             if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black)
             {
-                StartCoroutine(TriggerAI());
+                // Sadece Yapay Zeka modundaysak AI'yı çalıştır
+                if (GameSettings.CurrentMode == GameMode.HumanVsAI)
+                {
+                    StartCoroutine(TriggerAI());
+                }
+                // HumanVsHuman modunda hiçbir şey yapma, diğer oyuncunun tıklamasını bekle.
             }
         }
 
