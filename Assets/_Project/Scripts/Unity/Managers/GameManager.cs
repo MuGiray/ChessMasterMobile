@@ -52,14 +52,37 @@ namespace Chess.Unity.Managers
         {
             _board = new Board();
             _commandHistory = new Stack<ICommand>();
-            _aiOpponent = new ChessAI();
 
             if (_boardView != null) _boardView.GenerateBoard();
             if (_capturedPiecesUI != null) _capturedPiecesUI.ResetUI();
 
-            // Oyunu Başlat
-            LoadGame(FenUtility.StartFen);
-            Debug.Log("Game Core Initialized.");
+            _aiOpponent = new ChessAI();
+
+            // --- SAVE SYSTEM ENTEGRASYONU ---
+            if (SaveManager.HasSave())
+            {
+                Debug.Log("Save file found. Loading...");
+                SaveData data = SaveManager.Load();
+                
+                if (data != null)
+                {
+                    // Modu geri yükle
+                    GameSettings.CurrentMode = data.CurrentMode;
+                    // Tahtayı geri yükle
+                    LoadGame(data.FenString);
+                }
+                else
+                {
+                    // Dosya bozuksa sıfırdan başla
+                    LoadGame(FenUtility.StartFen);
+                }
+            }
+            else
+            {
+                // Kayıt yoksa sıfırdan başla
+                LoadGame(FenUtility.StartFen);
+            }
+            // --------------------------------
         }
 
         private void LoadGame(string fen)
@@ -85,6 +108,8 @@ namespace Chess.Unity.Managers
         {
             _uiManager.HideGameOver();
 
+            SaveManager.DeleteSave(); // Kaydı sil
+
             // YENİ: Restart atılırsa paneli kapat ve kilidi aç
             _promotionUI.Hide();
             _isPromotionActive = false;
@@ -99,6 +124,8 @@ namespace Chess.Unity.Managers
             _capturedPiecesUI.ResetUI();
             
             LoadGame(FenUtility.StartFen);
+            // Temiz başlangıcı hemen kaydet (İsteğe bağlı, ama güvenli)
+            SaveCurrentGame();
         }
 
         #region Input & Movement
@@ -256,6 +283,10 @@ namespace Chess.Unity.Managers
 
             CheckGameState();
 
+            // --- AUTO SAVE ---
+            SaveCurrentGame();
+            // -----------------
+
             // AI TETİKLEME
             if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black && GameSettings.CurrentMode == GameMode.HumanVsAI)
             {
@@ -349,6 +380,9 @@ namespace Chess.Unity.Managers
                     PerformUndo();
                 }
             }
+
+            // --- AUTO SAVE (Undo sonrası güncelle) ---
+            SaveCurrentGame();
         }
 
         private void PerformUndo()
@@ -415,5 +449,22 @@ namespace Chess.Unity.Managers
         }
 
         #endregion
+
+        private void SaveCurrentGame()
+        {
+            // Oyun bittiyse kaydı sil (Yeni oyun için temiz sayfa)
+            if (_currentGameState == GameState.Checkmate || _currentGameState == GameState.Stalemate)
+            {
+                SaveManager.DeleteSave();
+                return;
+            }
+
+            SaveData data = new SaveData
+            {
+                FenString = FenUtility.GenerateFenFromBoard(_board),
+                CurrentMode = GameSettings.CurrentMode
+            };
+            SaveManager.Save(data);
+        }
     }
 }
