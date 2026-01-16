@@ -1,5 +1,5 @@
 using UnityEngine;
-using TMPro; // TextMeshPro kullanacağız (Unity'nin modern text motoru)
+using TMPro;
 using UnityEngine.UI;
 
 namespace Chess.Unity.Managers
@@ -8,22 +8,26 @@ namespace Chess.Unity.Managers
     {
         [Header("Panels")]
         [SerializeField] private GameObject _gameOverPanel;
+        
+        [Header("UI Elements")]
         [SerializeField] private TextMeshProUGUI _winnerText;
         [SerializeField] private Button _restartButton;
 
         private void Start()
         {
-            // Başlangıçta paneli gizle
             _gameOverPanel.SetActive(false);
             
-            // Butona tıklandığında GameManager'ın Restart metodunu çağır
-            _restartButton.onClick.AddListener(() => GameManager.Instance.RestartGame());
+            _restartButton.onClick.AddListener(() => 
+            {
+                GameManager.Instance.RestartGame();
+            });
         }
 
-        public void ShowGameOver(string winner)
+        // DEĞİŞİKLİK: Artık "winner" değil "message" alıyor ve sonuna ekleme yapmıyor.
+        public void ShowGameOver(string message)
         {
             _gameOverPanel.SetActive(true);
-            _winnerText.text = $"{winner} WINS!";
+            _winnerText.text = message; // Direkt gelen mesajı yaz
         }
 
         public void HideGameOver()

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using Chess.Unity.Managers;
 using CoreVector2Int = Chess.Core.Models.Vector2Int;
 
@@ -15,7 +16,10 @@ namespace Chess.Unity.Controllers
 
         private void Update()
         {
-            // Mobil ve Editor uyumlu tıklama kontrolü
+            // UI Tıklamalarını Engelle
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (Input.touchCount > 0 && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
+
             if (Input.GetMouseButtonDown(0))
             {
                 HandleInput(Input.mousePosition);
@@ -28,23 +32,17 @@ namespace Chess.Unity.Controllers
 
         private void HandleInput(Vector3 screenPosition)
         {
-            // Ekran koordinatını Dünya koordinatına çevir
             Vector3 worldPosition = _mainCamera.ScreenToWorldPoint(screenPosition);
             
-            // Satranç tahtası tam sayı (integer) koordinatlarda olduğu için yuvarlıyoruz (Floor değil Round)
-            // Örn: 3.4 -> 3, 3.8 -> 4
             int x = Mathf.RoundToInt(worldPosition.x);
             int y = Mathf.RoundToInt(worldPosition.y);
 
-            // Tahta sınırları içinde mi?
             if (x >= 0 && x < 8 && y >= 0 && y < 8)
             {
-                // GameManager'a bildir
                 GameManager.Instance.OnSquareSelected(new CoreVector2Int(x, y));
             }
             else
             {
-                // Boşluğa tıklandı, seçimi kaldır
                 GameManager.Instance.DeselectPiece();
             }
         }

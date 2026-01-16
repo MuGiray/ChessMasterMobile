@@ -1,10 +1,7 @@
 using UnityEngine;
-using Chess.Unity.Managers; // GameManager'a erişim gerekebilir
-using Chess.Unity.ScriptableObjects; // Namespace'i eklemeyi unutma
+using System.Collections.Generic;
+using Chess.Unity.ScriptableObjects;
 using Chess.Core.Models;
-using System.Collections.Generic; // EKSİK OLAN SATIR BU
-
-// ÇÖZÜM: Core içindeki Vector2Int için alias.
 using CoreVector2Int = Chess.Core.Models.Vector2Int;
 
 namespace Chess.Unity.Views
@@ -12,44 +9,48 @@ namespace Chess.Unity.Views
     public class BoardView : MonoBehaviour
     {
         [Header("Assets")]
-        [SerializeField] private TileView _tilePrefab; // Prefab referansı
-        [SerializeField] private PieceView _piecePrefab; // YENİ
-        [SerializeField] private PieceTheme _currentTheme; // YENİ
+        [SerializeField] private TileView _tilePrefab;
+        [SerializeField] private PieceView _piecePrefab;
+        [SerializeField] private PieceTheme _currentTheme;
 
         [Header("Highlights")]
-        [SerializeField] private GameObject _highlightPrefab; // Yeşil nokta prefabı
-        [SerializeField] private GameObject _capturePrefab;   // Kırmızı Çerçeve
-        [SerializeField] private GameObject _lastMovePrefab;  // Sarı Çerçeve
+        [SerializeField] private GameObject _highlightPrefab;
+        [SerializeField] private GameObject _capturePrefab;
+        [SerializeField] private GameObject _lastMovePrefab;
         
         [Header("Settings")]
         [SerializeField] private Color _lightColor = new Color(0.9f, 0.9f, 0.9f);
         [SerializeField] private Color _darkColor = new Color(0.3f, 0.3f, 0.3f);
-        [SerializeField] private Transform _boardContainer; // Hiyerarşide kirlilik olmasın diye parent
-        [SerializeField] private Transform _piecesContainer; // Taşları ayrı bir objede toplayalım
+        [SerializeField] private Transform _boardContainer;
+        [SerializeField] private Transform _piecesContainer;
 
-        // POOLING SİSTEMİ: Çöp üretmemek için objeleri saklıyoruz.
+        // Optimization: Dictionary Lookup (O(1) access)
+        private Dictionary<CoreVector2Int, PieceView> _activePieces = new Dictionary<CoreVector2Int, PieceView>();
+
+        // Pooling
         private List<GameObject> _highlightPool = new List<GameObject>();
         private List<GameObject> _capturePool = new List<GameObject>();
-        // YENİ: Son hamle için 2 adet obje tutacağımız dizi (Başlangıç ve Bitiş)
         private GameObject[] _lastMoveObjects = new GameObject[2];
+
+        private Camera _cam;
+
+        private void Awake()
+        {
+            _cam = Camera.main;
+        }
 
         private void Update()
         {
-            // Bu satırın varlığından emin ol. Eğer silindiyse kamera ayarlama yapmaz.
             UpdateCameraSize();
         }
 
         private void UpdateCameraSize()
         {
-            Vector3 centerPosition = new Vector3(3.5f, 3.5f, -10f);
-            Camera.main.transform.position = centerPosition;
+            if (_cam == null) return;
 
+            _cam.transform.position = new Vector3(3.5f, 3.5f, -10f);
             float boardSize = 8f;
-            
-            // --- AYARLAR ---
-            // Dikey modda (Portrait) üst/alt boşluk (UI için)
             float verticalPadding = 2.0f; 
-            // Yatay modda (Landscape) yan boşluk
             float horizontalPadding = 0.5f;
 
             float targetHeight = boardSize + verticalPadding;
@@ -59,132 +60,97 @@ namespace Chess.Unity.Views
             float targetRatio = targetWidth / targetHeight;
 
             if (screenRatio >= targetRatio)
-            {
-                // LANDSCAPE (Yatay): Ekran geniş, Yüksekliği baz al.
-                // Eğer burası çalışıyor ama tahta küçükse, targetHeight değeriyle oyna.
-                Camera.main.orthographicSize = targetHeight / 2f;
-            }
+                _cam.orthographicSize = targetHeight / 2f;
             else
-            {
-                // PORTRAIT (Dikey): Ekran dar, Genişliği baz al.
-                float differenceInSize = targetRatio / screenRatio;
-                Camera.main.orthographicSize = (targetHeight / 2f) * differenceInSize;
-            }
-        }
-
-        // YENİ METOD: Dışarıdan (GameManager) çağrılacak
-        public void PlacePiece(CoreVector2Int coords, Piece piece)
-        {
-            if (piece.Type == PieceType.None) return;
-
-            Sprite sprite = _currentTheme.GetSprite(piece.Type, piece.Color);
-            if (sprite == null) 
-            {
-                Debug.LogError($"Sprite not found for {piece.Color} {piece.Type}");
-                return;
-            }
-
-            PieceView newPiece = Instantiate(_piecePrefab, _piecesContainer);
-            newPiece.Init(piece.Type, piece.Color, sprite);
-            newPiece.SetPositionImmediate(coords); // SetPosition yerine bunu kullan
-        }
-
-        // YENİ METOD: Bir taşı görsel olarak hareket ettir
-        public void MovePieceVisual(CoreVector2Int from, CoreVector2Int to)
-        {
-            // Kaynak karedeki görsel objeyi bulmamız lazım.
-            // Bunun için basit bir Raycast veya Dictionary kullanabiliriz.
-            // Şimdilik en basit yöntem: Koordinata göre ara (Performanslı değil ama Logic sağlamlaşana kadar yeterli)
-            
-            // Not: İleride Dictionary<Vector2Int, PieceView> kullanacağız.
-            foreach (Transform child in _piecesContainer)
-            {
-                if (Mathf.Abs(child.position.x - from.x) < 0.1f && Mathf.Abs(child.position.y - from.y) < 0.1f)
-                {
-                    PieceView view = child.GetComponent<PieceView>();
-                    view.MoveTo(to);
-                    return;
-                }
-            }
-        }
-
-        // YENİ METOD: Bir taşı görsel olarak yok et (Yeme işlemi)
-        public void RemovePieceVisual(CoreVector2Int coords)
-        {
-             foreach (Transform child in _piecesContainer)
-            {
-                if (Mathf.Abs(child.position.x - coords.x) < 0.1f && Mathf.Abs(child.position.y - coords.y) < 0.1f)
-                {
-                    Destroy(child.gameObject);
-                    return;
-                }
-            }
-        }
-
-        // Tahtayı temizlerken taşları da silelim (GenerateBoard içine eklenecek)
-        public void ClearPieces()
-        {
-            foreach (Transform child in _piecesContainer)
-            {
-                Destroy(child.gameObject);
-            }
+                _cam.orthographicSize = (targetHeight / 2f) * (targetRatio / screenRatio);
         }
 
         public void GenerateBoard()
         {
-            // Eski tahta varsa temizle (Editör modunda test ederken faydalı)
-            foreach (Transform child in _boardContainer)
-            {
-                Destroy(child.gameObject);
-            }
+            foreach (Transform child in _boardContainer) Destroy(child.gameObject);
 
             for (int x = 0; x < 8; x++)
             {
                 for (int y = 0; y < 8; y++)
                 {
-                    // Object Pooling burada devreye girebilir ama 64 kare için Instantiate performans sorunu yaratmaz.
                     TileView tile = Instantiate(_tilePrefab, _boardContainer);
                     tile.Init(x, y);
-
-                    // Satranç tahtası renklendirme formülü: (x + y) tek ise koyu, çift ise açık.
                     bool isLight = (x + y) % 2 != 0; 
                     tile.SetColor(isLight ? _lightColor : _darkColor);
                 }
             }
         }
 
-        public void HighlightLastMove(CoreVector2Int from, CoreVector2Int to)
+        public void ClearPieces()
         {
-            // Eğer objeler henüz yaratılmadıysa yarat
-            if (_lastMoveObjects[0] == null)
+            foreach (var kvp in _activePieces)
             {
-                // DÜZELTME: _tilesContainer yerine _boardContainer kullanıyoruz
-                _lastMoveObjects[0] = Instantiate(_lastMovePrefab, _boardContainer);
-                _lastMoveObjects[1] = Instantiate(_lastMovePrefab, _boardContainer);
+                if (kvp.Value != null) Destroy(kvp.Value.gameObject);
+            }
+            _activePieces.Clear();
+            
+            // Fallback temizlik (Hiyerarşide kalan varsa)
+            foreach (Transform child in _piecesContainer) Destroy(child.gameObject);
+        }
+
+        public void PlacePiece(CoreVector2Int coords, Piece piece)
+        {
+            if (piece.Type == PieceType.None) return;
+
+            // Zaten varsa önce sil (Güvenlik)
+            if (_activePieces.ContainsKey(coords))
+            {
+                Destroy(_activePieces[coords].gameObject);
+                _activePieces.Remove(coords);
             }
 
-            // 1. Objeleri Aktif Et
-            _lastMoveObjects[0].SetActive(true);
-            _lastMoveObjects[1].SetActive(true);
+            Sprite sprite = _currentTheme.GetSprite(piece.Type, piece.Color);
+            PieceView newPiece = Instantiate(_piecePrefab, _piecesContainer);
+            newPiece.Init(piece.Type, piece.Color, sprite);
+            newPiece.SetPositionImmediate(coords);
 
-            // 2. Pozisyonlarına Işınla
-            _lastMoveObjects[0].transform.position = new Vector3(from.x, from.y, 0);
-            _lastMoveObjects[1].transform.position = new Vector3(to.x, to.y, 0);
+            _activePieces[coords] = newPiece;
         }
 
-        // --- YENİ METOD: SON HAMLEYİ GİZLE (Restart için) ---
-        public void HideLastMoveHighlights()
+        public void MovePieceVisual(CoreVector2Int from, CoreVector2Int to)
         {
-            if (_lastMoveObjects[0] != null) _lastMoveObjects[0].SetActive(false);
-            if (_lastMoveObjects[1] != null) _lastMoveObjects[1].SetActive(false);
+            if (_activePieces.TryGetValue(from, out PieceView pieceView))
+            {
+                pieceView.MoveTo(to);
+                
+                // Dictionary güncellemesi
+                _activePieces.Remove(from);
+                
+                // Hedefte bir şey varsa (Yeme işlemi UI tarafında yapıldı ama Dict'ten düşmeli)
+                if (_activePieces.ContainsKey(to))
+                {
+                    // Normalde RemovePieceVisual çağrılmış olmalı, ama garanti olsun
+                    _activePieces.Remove(to);
+                }
+                
+                _activePieces[to] = pieceView;
+            }
+            else
+            {
+                Debug.LogWarning($"Visual consistency error: No piece found at {from.x},{from.y}");
+            }
         }
 
-        // GÜNCELLENEN METOD: Artık iki liste alıyor
+        public void RemovePieceVisual(CoreVector2Int coords)
+        {
+            if (_activePieces.TryGetValue(coords, out PieceView pieceView))
+            {
+                Destroy(pieceView.gameObject);
+                _activePieces.Remove(coords);
+            }
+        }
+
+        #region Highlights
+
         public void HighlightMoves(List<CoreVector2Int> moves, List<CoreVector2Int> captures)
         {
-            HideHighlights(); // Önce temizle
+            HideHighlights();
 
-            // 1. Normal Hamleler (Yeşil Nokta)
             foreach (var move in moves)
             {
                 GameObject hl = GetObjectFromPool(_highlightPool, _highlightPrefab);
@@ -192,49 +158,51 @@ namespace Chess.Unity.Views
                 hl.transform.position = new Vector3(move.x, move.y, -2);
             }
 
-            // 2. Yeme Hamleleri (Kırmızı Çerçeve)
             foreach (var cap in captures)
             {
                 GameObject capObj = GetObjectFromPool(_capturePool, _capturePrefab);
                 capObj.SetActive(true);
-                // Çerçevenin taşın ÖNÜNDE görünmesi için Z değerini ve Sorting Order'ı ayarlayacağız.
-                // Kod tarafında Z: -2 yeterli ama Prefab ayarı (Order in Layer) asıl belirleyici olacak.
                 capObj.transform.position = new Vector3(cap.x, cap.y, -2);
             }
         }
 
-        // Hepsini havuza geri gönder (Pasif yap)
+        public void HighlightLastMove(CoreVector2Int from, CoreVector2Int to)
+        {
+            if (_lastMoveObjects[0] == null)
+            {
+                _lastMoveObjects[0] = Instantiate(_lastMovePrefab, _boardContainer);
+                _lastMoveObjects[1] = Instantiate(_lastMovePrefab, _boardContainer);
+            }
+
+            _lastMoveObjects[0].SetActive(true);
+            _lastMoveObjects[1].SetActive(true);
+            _lastMoveObjects[0].transform.position = new Vector3(from.x, from.y, 0);
+            _lastMoveObjects[1].transform.position = new Vector3(to.x, to.y, 0);
+        }
+
         public void HideHighlights()
         {
             foreach (var hl in _highlightPool) hl.SetActive(false);
             foreach (var cap in _capturePool) cap.SetActive(false);
         }
 
-        // YENİ YARDIMCI METOD (Generic Pool Manager)
+        public void HideLastMoveHighlights()
+        {
+            if (_lastMoveObjects[0] != null) _lastMoveObjects[0].SetActive(false);
+            if (_lastMoveObjects[1] != null) _lastMoveObjects[1].SetActive(false);
+        }
+
         private GameObject GetObjectFromPool(List<GameObject> pool, GameObject prefab)
         {
             foreach (var item in pool)
             {
                 if (!item.activeInHierarchy) return item;
             }
-            GameObject newItem = Instantiate(prefab, _boardContainer); // TilesContainer altında dursunlar
+            GameObject newItem = Instantiate(prefab, _boardContainer);
             pool.Add(newItem);
             return newItem;
         }
 
-        // Havuz Yönetimi
-        private GameObject GetHighlightObject()
-        {
-            // 1. Havuzda pasif duran var mı? Varsa onu ver.
-            foreach (var hl in _highlightPool)
-            {
-                if (!hl.activeInHierarchy) return hl;
-            }
-
-            // 2. Yoksa yeni üret ve havuza ekle.
-            GameObject newHl = Instantiate(_highlightPrefab, _boardContainer); // TilesContainer içinde dursun
-            _highlightPool.Add(newHl);
-            return newHl;
-        }
+        #endregion
     }
 }

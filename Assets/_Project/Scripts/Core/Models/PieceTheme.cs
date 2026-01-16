@@ -1,9 +1,8 @@
 using UnityEngine;
-using Chess.Core.Models; // PieceType ve PieceColor için
+using Chess.Core.Models;
 
 namespace Chess.Unity.ScriptableObjects
 {
-    // Bu attribute, Unity içinde sağ tık menüsüne bu ayarı ekler.
     [CreateAssetMenu(fileName = "NewPieceTheme", menuName = "Chess/Piece Theme")]
     public class PieceTheme : ScriptableObject
     {
@@ -27,29 +26,30 @@ namespace Chess.Unity.ScriptableObjects
         {
             if (color == PieceColor.White)
             {
-                switch (type)
+                return type switch
                 {
-                    case PieceType.Pawn: return WhitePawn;
-                    case PieceType.Rook: return WhiteRook;
-                    case PieceType.Knight: return WhiteKnight;
-                    case PieceType.Bishop: return WhiteBishop;
-                    case PieceType.Queen: return WhiteQueen;
-                    case PieceType.King: return WhiteKing;
-                }
+                    PieceType.Pawn => WhitePawn,
+                    PieceType.Rook => WhiteRook,
+                    PieceType.Knight => WhiteKnight,
+                    PieceType.Bishop => WhiteBishop,
+                    PieceType.Queen => WhiteQueen,
+                    PieceType.King => WhiteKing,
+                    _ => null
+                };
             }
             else
             {
-                switch (type)
+                return type switch
                 {
-                    case PieceType.Pawn: return BlackPawn;
-                    case PieceType.Rook: return BlackRook;
-                    case PieceType.Knight: return BlackKnight;
-                    case PieceType.Bishop: return BlackBishop;
-                    case PieceType.Queen: return BlackQueen;
-                    case PieceType.King: return BlackKing;
-                }
+                    PieceType.Pawn => BlackPawn,
+                    PieceType.Rook => BlackRook,
+                    PieceType.Knight => BlackKnight,
+                    PieceType.Bishop => BlackBishop,
+                    PieceType.Queen => BlackQueen,
+                    PieceType.King => BlackKing,
+                    _ => null
+                };
             }
-            return null;
         }
     }
 }

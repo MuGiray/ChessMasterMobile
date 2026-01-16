@@ -10,46 +10,30 @@ namespace Chess.Unity.Managers
         [Header("Audio Clips")]
         [SerializeField] private AudioClip _moveSound;
         [SerializeField] private AudioClip _captureSound;
-        [SerializeField] private AudioClip _notifySound; // Şah çekme vs.
+        [SerializeField] private AudioClip _notifySound;
         [SerializeField] private AudioClip _gameOverSound;
 
         private AudioSource _source;
 
         private void Awake()
         {
-            if (Instance != null && Instance != this) { Destroy(this); return; }
+            if (Instance != null && Instance != this) 
+            { 
+                Destroy(gameObject); 
+                return; 
+            }
             Instance = this;
-
             _source = GetComponent<AudioSource>();
         }
 
-        public void PlayMove()
-        {
-            PlayClip(_moveSound);
-        }
-
-        public void PlayCapture()
-        {
-            PlayClip(_captureSound);
-        }
-
-        public void PlayNotify()
-        {
-            PlayClip(_notifySound);
-        }
-
-        public void PlayGameOver()
-        {
-            PlayClip(_gameOverSound);
-        }
+        public void PlayMove() => PlayClip(_moveSound);
+        public void PlayCapture() => PlayClip(_captureSound);
+        public void PlayNotify() => PlayClip(_notifySound);
+        public void PlayGameOver() => PlayClip(_gameOverSound);
 
         private void PlayClip(AudioClip clip)
         {
-            if (clip != null)
-            {
-                // PlayOneShot: Üst üste ses çalmaya izin verir (Hızlı hamlelerde kesilmez)
-                _source.PlayOneShot(clip); 
-            }
+            if (clip != null) _source.PlayOneShot(clip);
         }
     }
 }

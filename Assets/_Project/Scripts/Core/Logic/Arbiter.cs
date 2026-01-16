@@ -8,7 +8,7 @@ namespace Chess.Core.Logic
         public static List<Vector2Int> GetLegalMoves(Board board, Vector2Int from)
         {
             List<Vector2Int> pseudoMoves = MoveGenerator.GetPseudoLegalMoves(board, from);
-            List<Vector2Int> legalMoves = new List<Vector2Int>();
+            List<Vector2Int> legalMoves = new List<Vector2Int>(pseudoMoves.Count);
 
             foreach (var to in pseudoMoves)
             {
@@ -22,6 +22,7 @@ namespace Chess.Core.Logic
 
         public static GameState CheckGameState(Board board)
         {
+            // Mat/Pat kontrolü için herhangi bir yasal hamle var mı diye bak
             bool hasLegalMove = false;
 
             for (int x = 0; x < 8; x++)
@@ -34,13 +35,13 @@ namespace Chess.Core.Logic
                         if (GetLegalMoves(board, new Vector2Int(x, y)).Count > 0)
                         {
                             hasLegalMove = true;
-                            break;
+                            goto EndLoop; // Çift döngüden hızlı çıkış
                         }
                     }
                 }
-                if (hasLegalMove) break;
             }
-
+            
+            EndLoop:
             if (hasLegalMove) return GameState.InProgress;
 
             Vector2Int kingPos = FindKing(board, board.Turn);
@@ -50,35 +51,28 @@ namespace Chess.Core.Logic
             {
                 return GameState.Checkmate;
             }
-            else
-            {
-                return GameState.Stalemate;
-            }
+            return GameState.Stalemate;
         }
         
-        // --- KRİTİK DÜZELTME BURADA ---
         private static bool IsMoveSafe(Board board, Vector2Int from, Vector2Int to)
         {
             Piece movedPiece = board.GetPieceAt(from);
             Piece capturedPiece = board.GetPieceAt(to);
             
-            // 1. Hamleyi Yap (MANUEL SİMÜLASYON)
-            // board.MovePiece() KULLANMIYORUZ! Çünkü o sırayı (Turn) değiştiriyor.
-            // Biz sadece taşların yerini değiştirip bakacağız, sırayı bozmayacağız.
+            // Simülasyon
             board.SetPieceAt(to, movedPiece);
             board.SetPieceAt(from, new Piece(PieceType.None, PieceColor.None));
             
-            // 2. Kontrol Et: Şahım tehdit altında mı?
             Vector2Int kingPos = (movedPiece.Type == PieceType.King) ? to : FindKing(board, movedPiece.Color);
             PieceColor opponentColor = (movedPiece.Color == PieceColor.White) ? PieceColor.Black : PieceColor.White;
             
             bool isCheck = MoveGenerator.IsSquareAttacked(board, kingPos, opponentColor);
 
-            // 3. Hamleyi Geri Al (Undo)
+            // Geri Al
             board.SetPieceAt(from, movedPiece);
             board.SetPieceAt(to, capturedPiece);
 
-            return !isCheck; // Şah çekilmiyorsa güvenlidir.
+            return !isCheck;
         }
 
         private static Vector2Int FindKing(Board board, PieceColor color)

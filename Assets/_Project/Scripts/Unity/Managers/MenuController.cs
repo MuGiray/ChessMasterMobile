@@ -1,20 +1,20 @@
 using UnityEngine;
-using UnityEngine.SceneManagement; // Sahne geçişi için şart
+using UnityEngine.SceneManagement;
 
 namespace Chess.Unity.Managers
 {
     public class MenuController : MonoBehaviour
     {
+        private const string GAME_SCENE_NAME = "SampleScene";
+
         public void PlayGame()
         {
-            // "SampleScene" senin oyun sahnennin adı. 
-            // Eğer değiştirdiysen burayı güncelle.
-            SceneManager.LoadScene("SampleScene");
+            SceneManager.LoadScene(GAME_SCENE_NAME);
         }
 
         public void QuitGame()
         {
-            Debug.Log("QUIT REQUESTED"); // Editörde kapanmaz, log düşer.
+            Debug.Log("QUIT APP");
             Application.Quit();
         }
     }
