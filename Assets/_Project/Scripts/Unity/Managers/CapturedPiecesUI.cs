@@ -39,5 +39,17 @@ namespace Chess.Unity.Managers
         {
             foreach (Transform child in container) Destroy(child.gameObject);
         }
+
+        // YENİ METOD: Son eklenen taşı listeden sil (Undo işlemi için)
+        public void RemoveLastCapturedPiece(PieceColor color)
+        {
+            Transform container = (color == PieceColor.White) ? _whiteCapturedContainer : _blackCapturedContainer;
+
+            if (container.childCount > 0)
+            {
+                // En sondaki objeyi (son yenen taşı) yok et
+                DestroyImmediate(container.GetChild(container.childCount - 1).gameObject);
+            }
+        }
     }
 }

@@ -321,5 +321,99 @@ namespace Chess.Unity.Managers
         }
 
         #endregion
+
+        #region Undo System
+
+        public void UndoMove()
+        {
+            // 1. Güvenlik Kontrolleri
+            if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive) return;
+
+            // 2. Mod Kontrolü
+            if (GameSettings.CurrentMode == GameMode.HumanVsAI)
+            {
+                // AI Modu: Eğer sıra BEYAZ'daysa (yani AI oynamış ve sıra bize geçmişse),
+                // "Son Hamleyi Geri Al" demek, hem AI'yı hem Bizi geri al demektir.
+                // Böylece tekrar oynama sırası bize geçer.
+                if (_board.Turn == PieceColor.White && _commandHistory.Count >= 2)
+                {
+                    PerformUndo(); // AI'nın hamlesini geri al
+                    PerformUndo(); // Bizim hamlemizi geri al
+                }
+            }
+            else
+            {
+                // Arkadaş Modu: Sadece tek bir hamle geri al.
+                if (_commandHistory.Count > 0)
+                {
+                    PerformUndo();
+                }
+            }
+        }
+
+        private void PerformUndo()
+        {
+            if (_commandHistory.Count == 0) return;
+
+            // 1. Komutu Çıkar
+            ICommand lastCmd = _commandHistory.Pop();
+            MoveCommand moveCmd = lastCmd as MoveCommand; // Verilere erişmek için cast ediyoruz
+
+            // 2. Mantıksal Geri Alma (Board Logic)
+            lastCmd.Undo();
+
+            // 3. Görsel Geri Alma (Board Visual)
+            // En temiz yöntem: Tahtayı o anki duruma göre yeniden çizmek.
+            // (Optimize edilmiş BoardView sayesinde bu işlem çok hızlıdır)
+            RefreshBoardVisuals();
+
+            // 4. Yenen Taşlar UI Güncellemesi
+            if (moveCmd != null && moveCmd.CapturedPiece.Type != PieceType.None)
+            {
+                // Eğer bu hamlede taş yendiyse, UI'dan sil.
+                _capturedPiecesUI.RemoveLastCapturedPiece(moveCmd.CapturedPiece.Color);
+            }
+
+            // 5. Ses
+            // Geri alma sesi çalabiliriz veya sessiz olabilir. Şimdilik sessiz.
+
+            // 6. Sarı Çerçeveleri (Last Move) Güncelle
+            // Bir önceki hamlenin sarı çerçevesini göstermek için geçmişe bak
+            if (_commandHistory.Count > 0)
+            {
+                // Bir önceki hamleyi bul ama stack'ten çıkarma (Peek)
+                // Not: Stack ICommand tutuyor, MoveCommand olduğunu varsayıyoruz.
+                // Detaylı görselleştirme için MoveCommand içine "public To/From" eklememiz gerekebilir.
+                // Şimdilik sarı çerçeveyi gizleyelim, kafa karıştırmasın.
+                _boardView.HideLastMoveHighlights();
+            }
+            else
+            {
+                _boardView.HideLastMoveHighlights();
+            }
+            
+            // Oyun durumu devam ediyor (Mat olmuşsa bile geri alınca devam eder)
+            _currentGameState = GameState.InProgress;
+            _uiManager.HideGameOver(); // Oyun bittiyse paneli kapat
+        }
+
+        private void RefreshBoardVisuals()
+        {
+            _boardView.ClearPieces();
+
+            for (int x = 0; x < 8; x++)
+            {
+                for (int y = 0; y < 8; y++)
+                {
+                    Piece piece = _board.GetPieceAt(new Vector2Int(x, y));
+                    if (piece.Type != PieceType.None)
+                    {
+                        _boardView.PlacePiece(new Vector2Int(x, y), piece);
+                    }
+                }
+            }
+        }
+
+        #endregion
     }
 }

@@ -27,6 +27,9 @@ namespace Chess.Architecture.Commands
         // YENİ: Dönüşülecek taş türü (Varsayılan: Vezir)
         private readonly PieceType _promotionType;
 
+        // YENİ: Dışarıdan okumak için Property
+        public Piece CapturedPiece => _capturedPiece;
+
         // Constructor güncellendi: promotionType parametresi eklendi
         public MoveCommand(Board board, Vector2Int from, Vector2Int to, PieceType promotionType = PieceType.Queen)
         {
