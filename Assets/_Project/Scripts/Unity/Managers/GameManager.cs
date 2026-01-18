@@ -100,26 +100,36 @@ namespace Chess.Unity.Managers
 
         public void RestartGame()
         {
+            // 1. ZAMANI VE DURUMU DÜZELT (YENİ KISIM)
+            // Eğer oyun duraklatılmış modda restart atılıyorsa, önce zamanı akıt ve paneli kapat.
+            if (_isPaused)
+            {
+                Time.timeScale = 1f;
+                _isPaused = false;
+                _uiManager.HidePause();
+            }
+
+            // 2. UI Temizliği
             _uiManager.HideGameOver();
             
+            // 3. Kaydı Sil (Bu modun kaydını sil)
             SaveManager.DeleteSave(GameSettings.CurrentMode);
-
-            // YENİ: Restart atılırsa paneli kapat ve kilidi aç
-            _promotionUI.Hide();
-            _isPromotionActive = false;
-
-            _currentGameState = GameState.InProgress;
             
-            DeselectPiece();
+            // 4. State Reset (Değişkenleri sıfırla)
+            _currentGameState = GameState.InProgress;
+            _selectedSquare = new Vector2Int(-1, -1);
+            _validMoves.Clear();
+            _commandHistory.Clear(); // Geçmişi temizle
+            
             _boardView.HideHighlights();
             _boardView.HideLastMoveHighlights();
-            
-            _validMoves.Clear();
             _capturedPiecesUI.ResetUI();
             
+            // 5. Oyunu Baştan Yükle
             LoadGame(FenUtility.StartFen);
-            // Temiz başlangıcı hemen kaydet (İsteğe bağlı, ama güvenli)
-            SaveCurrentGame();
+            
+            // 6. Temiz başlangıcı kaydet
+            SaveCurrentGame(); 
         }
 
         private void ReplayGame(SaveData data)

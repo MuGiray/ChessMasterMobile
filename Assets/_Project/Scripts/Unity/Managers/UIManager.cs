@@ -13,6 +13,7 @@ namespace Chess.Unity.Managers
         [Header("UI Elements")]
         [SerializeField] private TextMeshProUGUI _winnerText;
         [SerializeField] private Button _restartButton;
+        [SerializeField] private Button _pauseRestartButton; // Pause panelindeki Restart butonu
         
         // YENİ BUTONLAR
         [SerializeField] private Button _pauseButton;      // Oyunu durduran buton (Sağ üstte)
@@ -36,6 +37,14 @@ namespace Chess.Unity.Managers
             
             // Main Menu Butonu -> GameManager üzerinden menüye döner
             _mainMenuButton.onClick.AddListener(() => GameManager.Instance.ReturnToMainMenu());
+
+            if (_pauseRestartButton != null)
+            {
+                _pauseRestartButton.onClick.AddListener(() => 
+                {
+                    GameManager.Instance.RestartGame();
+                });
+            }
         }
 
         public void ShowGameOver(string message)
