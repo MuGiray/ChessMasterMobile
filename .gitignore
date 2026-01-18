@@ -1,16 +1,16 @@
-# Unity generated folders
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
 /[Ll]ogs/
+/[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
-
-# Visual Studio / Rider generated
-.vs/
-.idea/
+/.vs/
+/.gradle/
+.DS_Store
 *.csproj
+*.unityproj
 *.sln
 *.suo
 *.tmp
@@ -23,7 +23,4 @@
 *.mdb
 *.opendb
 *.VC.db
-
-# OS generated
-.DS_Store
-Thumbs.db
+.utmp/

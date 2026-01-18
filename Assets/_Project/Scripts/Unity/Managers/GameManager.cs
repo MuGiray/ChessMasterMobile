@@ -254,12 +254,8 @@ namespace Chess.Unity.Managers
 
         public void OnSquareSelected(Vector2Int coords)
         {
-            // 1. Oyun bitmişse veya AI düşünüyorsa dokunma
+            // ... (Güvenlik kontrolleri aynen kalsın) ...
             if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive || _isPaused) return;
-
-            // 2. MOD KONTROLÜ (DÜZELTME BURADA)
-            // Eğer oyun modu "Human vs AI" ise VE sıra Siyah'taysa (AI), oyuncunun dokunmasını engelle.
-            // Ama "Human vs Human" ise bu satır çalışmayacak ve Siyah oynayabilecek.
             if (GameSettings.CurrentMode == GameMode.HumanVsAI && _board.Turn == PieceColor.Black) return;
 
             if (_selectedSquare.x == -1)
@@ -269,6 +265,7 @@ namespace Chess.Unity.Managers
             else
             {
                 Piece clickedPiece = _board.GetPieceAt(coords);
+                
                 if (clickedPiece.Color == _board.Turn)
                 {
                     SelectPiece(coords);
@@ -280,6 +277,10 @@ namespace Chess.Unity.Managers
                 }
                 else
                 {
+                    // GEÇERSİZ HAMLE
+                    // Rakibe veya boşa tıkladı ama oraya gidemiyor.
+                    HapticsManager.Instance.VibrateError(); // "BIZZ" (Hata)
+                    
                     DeselectPiece();
                 }
             }
@@ -395,6 +396,19 @@ namespace Chess.Unity.Managers
             moveCmd.Execute();
             _commandHistory.Push(moveCmd);
 
+            // -> TİTREŞİM BURAYA EKLENİYOR <-
+            // Hamle yapıldı, peki taş yendi mi?
+            MoveCommand castedCmd = moveCmd as MoveCommand;
+            if (isCapture || (castedCmd != null && castedCmd.CapturedPiece.Type != PieceType.None))
+            {
+                HapticsManager.Instance.VibrateMedium(); // Taş Yeme = Tok Titreşim
+            }
+            else
+            {
+                HapticsManager.Instance.VibrateLight(); // Normal Hamle = Hafif Tık
+            }
+            // ------------------------------
+
             // GÖRSEL DÜZELTME (Piyon -> Seçilen Taş)
             Piece pieceAfterMove = _board.GetPieceAt(to);
             if (movedPiece.Type == PieceType.Pawn && pieceAfterMove.Type != PieceType.Pawn)
@@ -449,24 +463,26 @@ namespace Chess.Unity.Managers
 
             if (_currentGameState == GameState.Checkmate)
             {
-                // MAT SESİ
-                AudioManager.Instance.PlayGameOver(); 
+                HapticsManager.Instance.VibrateHeavy(); // MAT = AĞIR TİTREŞİM
+                AudioManager.Instance.PlayGameOver();
                 
                 string winnerName = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
                 _uiManager.ShowGameOver($"{winnerName} WINS!");
             }
             else if (_currentGameState == GameState.Stalemate)
             {
-                // PAT SESİ (Game Over çalabiliriz)
+                HapticsManager.Instance.VibrateHeavy(); // PAT = AĞIR TİTREŞİM
                 AudioManager.Instance.PlayGameOver();
                 
                 _uiManager.ShowGameOver("GAME DRAWN\n(Stalemate)");
             }
             else
             {
+                // OYUN SÜRÜYOR: ŞAH ÇEKİLDİ Mİ?
                 if (Arbiter.IsInCheck(_board, _board.Turn))
                 {
-                    AudioManager.Instance.PlayNotify(); // "DIT" Sesi
+                    HapticsManager.Instance.VibrateMedium(); // ŞAH = UYARI TİTREŞİMİ
+                    AudioManager.Instance.PlayNotify();
                 }
             }
         }
