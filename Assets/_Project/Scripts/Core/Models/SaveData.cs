@@ -6,9 +6,13 @@ namespace Chess.Core.Models
     [Serializable]
     public class SaveData
     {
-        public string InitialFen; // Oyunun başlangıç konumu (Replay için şart)
+        public string InitialFen;
         public GameMode CurrentMode;
-        public List<MoveRecord> MoveHistory; // Hamle geçmişi
+        public List<MoveRecord> MoveHistory;
+        
+        // YENİ: Oyuncuların kalan süreleri (Saniye cinsinden)
+        public float WhiteTimeRemaining;
+        public float BlackTimeRemaining;
     }
 
     [Serializable]
