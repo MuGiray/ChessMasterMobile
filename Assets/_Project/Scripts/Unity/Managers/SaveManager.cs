@@ -6,16 +6,23 @@ namespace Chess.Unity.Managers
 {
     public static class SaveManager
     {
-        // Dosya yolu: Android/iOS kalıcı veri klasörü
-        private static string SavePath => Path.Combine(Application.persistentDataPath, "chess_autosave.json");
+        // ARTIK SABİT BİR İSİM YOK. MODA GÖRE ÜRETİLİYOR.
+        private static string GetSavePath(GameMode mode)
+        {
+            // Örnek: .../persistentDataPath/save_HumanVsAI.json
+            return Path.Combine(Application.persistentDataPath, $"save_{mode}.json");
+        }
 
         public static void Save(SaveData data)
         {
             try
             {
+                // Hangi moddaysak o dosya ismini al
+                string path = GetSavePath(data.CurrentMode);
+                
                 string json = JsonUtility.ToJson(data, true);
-                File.WriteAllText(SavePath, json);
-                Debug.Log($"Game Saved to: {SavePath}");
+                File.WriteAllText(path, json);
+                Debug.Log($"Game Saved ({data.CurrentMode}) to: {path}");
             }
             catch (System.Exception e)
             {
@@ -23,13 +30,16 @@ namespace Chess.Unity.Managers
             }
         }
 
-        public static SaveData Load()
+        // Load metodu artık "Hangi modu yükleyeyim?" diye sormalı
+        public static SaveData Load(GameMode mode)
         {
-            if (!File.Exists(SavePath)) return null;
+            string path = GetSavePath(mode);
+            
+            if (!File.Exists(path)) return null;
 
             try
             {
-                string json = File.ReadAllText(SavePath);
+                string json = File.ReadAllText(path);
                 return JsonUtility.FromJson<SaveData>(json);
             }
             catch (System.Exception e)
@@ -39,18 +49,20 @@ namespace Chess.Unity.Managers
             }
         }
 
-        public static void DeleteSave()
+        public static void DeleteSave(GameMode mode)
         {
-            if (File.Exists(SavePath))
+            string path = GetSavePath(mode);
+            
+            if (File.Exists(path))
             {
-                File.Delete(SavePath);
-                Debug.Log("Save file deleted.");
+                File.Delete(path);
+                Debug.Log($"Save file deleted for mode: {mode}");
             }
         }
 
-        public static bool HasSave()
+        public static bool HasSave(GameMode mode)
         {
-            return File.Exists(SavePath);
+            return File.Exists(GetSavePath(mode));
         }
     }
 }

@@ -62,15 +62,19 @@ namespace Chess.Unity.Managers
 
             _aiOpponent = new ChessAI();
 
-            if (SaveManager.HasSave())
+            // GÜNCELLEME: Şu anki mod neyse, ONUN kayıt dosyasına bak.
+            // MenuController zaten sahne yüklenmeden önce GameSettings.CurrentMode'u ayarlamıştı.
+            GameMode currentMode = GameSettings.CurrentMode;
+
+            if (SaveManager.HasSave(currentMode))
             {
-                Debug.Log("Save file found. Replaying History...");
-                SaveData data = SaveManager.Load();
+                Debug.Log($"Save file found for {currentMode}. Replaying History...");
+                SaveData data = SaveManager.Load(currentMode); // Modu parametre olarak ver
                 
                 if (data != null)
                 {
+                    // Modu zaten biliyoruz ama yine de eşitleyelim (Güvenlik)
                     GameSettings.CurrentMode = data.CurrentMode;
-                    // REPLAY MODU: Kayıtlı oyunu tekrar oynat
                     ReplayGame(data);
                 }
                 else
@@ -97,8 +101,8 @@ namespace Chess.Unity.Managers
         public void RestartGame()
         {
             _uiManager.HideGameOver();
-
-            SaveManager.DeleteSave(); // Kaydı sil
+            
+            SaveManager.DeleteSave(GameSettings.CurrentMode);
 
             // YENİ: Restart atılırsa paneli kapat ve kilidi aç
             _promotionUI.Hide();
@@ -491,7 +495,7 @@ namespace Chess.Unity.Managers
         {
             if (_currentGameState == GameState.Checkmate || _currentGameState == GameState.Stalemate)
             {
-                SaveManager.DeleteSave();
+                SaveManager.DeleteSave(GameSettings.CurrentMode); // GÜNCELLENDİ: Parametre eklendi
                 return;
             }
 
@@ -513,8 +517,8 @@ namespace Chess.Unity.Managers
 
             SaveData data = new SaveData
             {
-                InitialFen = _initialFen, // Başlangıç noktasını kaydet
-                CurrentMode = GameSettings.CurrentMode,
+                InitialFen = _initialFen,
+                CurrentMode = GameSettings.CurrentMode, // Buradaki mod önemli
                 MoveHistory = historyList
             };
             SaveManager.Save(data);
