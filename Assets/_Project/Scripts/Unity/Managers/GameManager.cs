@@ -134,14 +134,16 @@ namespace Chess.Unity.Managers
         private void HandleTimeout(PieceColor loserColor)
         {
             _isTimerActive = false;
-            _currentGameState = GameState.Checkmate; // Teknik olarak Timeout ama oyun biter.
+            _currentGameState = GameState.Checkmate; 
+            
+            // SÜRE BİTİNCE DE GAME OVER SESİ ÇALSIN
+            AudioManager.Instance.PlayGameOver(); 
             
             string winner = (loserColor == PieceColor.White) ? "Black" : "White";
             Debug.Log($"TIME OUT! {winner} Wins!");
             
             _uiManager.ShowGameOver($"{winner} Wins by Timeout!");
             
-            // Kaydı sil
             SaveManager.DeleteSave(GameSettings.CurrentMode);
         }
 
@@ -447,22 +449,26 @@ namespace Chess.Unity.Managers
 
             if (_currentGameState == GameState.Checkmate)
             {
-                AudioManager.Instance.PlayGameOver();
+                // MAT SESİ
+                AudioManager.Instance.PlayGameOver(); 
                 
-                // Kazananı belirle
                 string winnerName = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
-                
-                // Mesajı burada oluştur: "WHITE WINS!"
                 _uiManager.ShowGameOver($"{winnerName} WINS!");
             }
             else if (_currentGameState == GameState.Stalemate)
             {
+                // PAT SESİ (Game Over çalabiliriz)
                 AudioManager.Instance.PlayGameOver();
                 
-                // Mesajı burada oluştur: Alt satıra sebebini yaz
                 _uiManager.ShowGameOver("GAME DRAWN\n(Stalemate)");
             }
-            // İleride buraya "Insufficient Material" veya "50-Move Rule" ekleyebiliriz.
+            else
+            {
+                if (Arbiter.IsInCheck(_board, _board.Turn))
+                {
+                    AudioManager.Instance.PlayNotify(); // "DIT" Sesi
+                }
+            }
         }
 
         public void SetPaused(bool paused)

@@ -63,11 +63,17 @@ namespace Chess.Core.Logic
         
         // Bu metoda da dışarıdan erişilebilmesi için public yaptım (GameManager kullanıyordu)
         public static bool IsInCheck(Board board, PieceColor kingColor)
-        {
+        {            
+            // Cache'den okuyoruz
             Vector2Int kingPos = (kingColor == PieceColor.White) ? board.WhiteKingPos : board.BlackKingPos;
+
+            // Eğer kral tahtada yoksa (Hata durumu) false dön
             if (kingPos.x == -1) return false;
 
+            // Rakip rengi belirle
             PieceColor opponentColor = (kingColor == PieceColor.White) ? PieceColor.Black : PieceColor.White;
+
+            // Kralın olduğu kare tehdit altında mı?
             return MoveGenerator.IsSquareAttacked(board, kingPos, opponentColor);
         }
 
