@@ -24,29 +24,45 @@ namespace Chess.Unity.Views
         [SerializeField] private Transform _boardContainer;
         [SerializeField] private Transform _piecesContainer;
 
-        // Optimization: Dictionary Lookup (O(1) access)
         private Dictionary<CoreVector2Int, PieceView> _activePieces = new Dictionary<CoreVector2Int, PieceView>();
 
-        // Pooling
         private List<GameObject> _highlightPool = new List<GameObject>();
         private List<GameObject> _capturePool = new List<GameObject>();
         private GameObject[] _lastMoveObjects = new GameObject[2];
 
         private Camera _cam;
+        
+        // OPTİMİZASYON: Son ekran boyutunu hatırla
+        private float _lastScreenWidth;
+        private float _lastScreenHeight;
 
         private void Awake()
         {
             _cam = Camera.main;
         }
 
-        private void Update()
+        private void Start()
         {
-            UpdateCameraSize();
+            // Başlangıçta bir kez çalıştır
+            UpdateCameraSize(true);
         }
 
-        private void UpdateCameraSize()
+        private void Update()
+        {
+            // OPTİMİZASYON: Sadece ekran boyutu değişirse hesaplama yap
+            if (Screen.width != _lastScreenWidth || Screen.height != _lastScreenHeight)
+            {
+                UpdateCameraSize(false);
+            }
+        }
+
+        private void UpdateCameraSize(bool force)
         {
             if (_cam == null) return;
+            
+            // Boyutları kaydet
+            _lastScreenWidth = Screen.width;
+            _lastScreenHeight = Screen.height;
 
             _cam.transform.position = new Vector3(3.5f, 3.5f, -10f);
             float boardSize = 8f;

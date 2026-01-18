@@ -10,7 +10,7 @@ using Vector2Int = Chess.Core.Models.Vector2Int;
 
 namespace Chess.Unity.Managers
 {
-    [DefaultExecutionOrder(-10)] // Diğer scriptlerden önce başlasın
+    [DefaultExecutionOrder(-10)]
     public sealed class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
@@ -30,9 +30,12 @@ namespace Chess.Unity.Managers
         // --- CHESS CLOCK ---
         private float _whiteTime;
         private float _blackTime;
-        private const float START_TIME = 600f; // 10 Dakika (600 saniye)
-        private bool _isTimerActive = false; // Oyun başlamadan süre akmasın
+        private const float START_TIME = 600f; 
+        private bool _isTimerActive = false;
         
+        // OPTİMİZASYON İÇİN EKLENEN DEĞİŞKENLER
+        private int _lastWhiteSecond;
+        private int _lastBlackSecond;
 
         // State
         private GameState _currentGameState = GameState.InProgress;
@@ -40,12 +43,10 @@ namespace Chess.Unity.Managers
         private List<Vector2Int> _validMoves = new List<Vector2Int>();
 
         private bool _isPromotionActive = false;
-        // YENİ: Durdurma durumu
         private bool _isPaused = false;
         
-        // AI Control
         private bool _isAIThinking = false;
-        private readonly WaitForSeconds _aiDelay = new WaitForSeconds(1.0f); // Cachelendi (Memory Optimization)
+        private readonly WaitForSeconds _aiDelay = new WaitForSeconds(1.0f);
 
         private void Awake()
         {
@@ -68,8 +69,6 @@ namespace Chess.Unity.Managers
 
             _aiOpponent = new ChessAI();
 
-            // GÜNCELLEME: Şu anki mod neyse, ONUN kayıt dosyasına bak.
-            // MenuController zaten sahne yüklenmeden önce GameSettings.CurrentMode'u ayarlamıştı.
             GameMode currentMode = GameSettings.CurrentMode;
 
             if (SaveManager.HasSave(currentMode))
@@ -79,33 +78,35 @@ namespace Chess.Unity.Managers
                 
                 if (data != null)
                 {
-                    // KAYITLI SÜRELERİ AL (Eğer 0 ise varsayılanı kullan)
                     _whiteTime = data.WhiteTimeRemaining > 0 ? data.WhiteTimeRemaining : START_TIME;
                     _blackTime = data.BlackTimeRemaining > 0 ? data.BlackTimeRemaining : START_TIME;
 
-                    // Modu zaten biliyoruz ama yine de eşitleyelim (Güvenlik)
                     GameSettings.CurrentMode = data.CurrentMode;
                     ReplayGame(data);
                 }
                 else
                 {
-                    ResetTimers(); // Sıfırla
+                    ResetTimers();
                     LoadGame(FenUtility.StartFen);
                 }
-                _isTimerActive = true; // Oyun başlayınca saati başlat
+                _isTimerActive = true;
             }
             else
             {
+                ResetTimers(); // Yeni oyunsa da timerları sıfırla
                 LoadGame(FenUtility.StartFen);
+                _isTimerActive = true; // Yeni oyunda da timer başlasın
             }
+            
+            // İlk açılışta UI'ı bir kez zorla güncelle
+            _uiManager.UpdateTimerUI(_whiteTime, _blackTime, _board.Turn);
         }
 
         private void Update()
         {
-            // Oyun oynanmıyorsa veya duraklatıldıysa zamanı durdur
             if (_currentGameState != GameState.InProgress || _isPaused || !_isTimerActive) return;
 
-            // Zamanı Azalt (DeltaTime kadar)
+            // Zamanı Azalt
             if (_board.Turn == PieceColor.White)
             {
                 _whiteTime -= Time.deltaTime;
@@ -117,8 +118,17 @@ namespace Chess.Unity.Managers
                 if (_blackTime <= 0) HandleTimeout(PieceColor.Black);
             }
 
-            // UI'ı Güncelle (Her karede)
-            _uiManager.UpdateTimerUI(_whiteTime, _blackTime, _board.Turn);
+            // --- OPTİMİZASYON ---
+            // Sadece saniye değiştiğinde UI güncelle (Performans + Battery Saver)
+            int currentWhiteCeil = Mathf.CeilToInt(_whiteTime);
+            int currentBlackCeil = Mathf.CeilToInt(_blackTime);
+
+            if (currentWhiteCeil != _lastWhiteSecond || currentBlackCeil != _lastBlackSecond)
+            {
+                _uiManager.UpdateTimerUI(_whiteTime, _blackTime, _board.Turn);
+                _lastWhiteSecond = currentWhiteCeil;
+                _lastBlackSecond = currentBlackCeil;
+            }
         }
 
         private void HandleTimeout(PieceColor loserColor)
@@ -139,6 +149,8 @@ namespace Chess.Unity.Managers
         {
             _whiteTime = START_TIME;
             _blackTime = START_TIME;
+            _lastWhiteSecond = (int)START_TIME;
+            _lastBlackSecond = (int)START_TIME;
         }
 
         private void LoadGame(string fen)
@@ -177,14 +189,10 @@ namespace Chess.Unity.Managers
             _boardView.HideLastMoveHighlights();
             _capturedPiecesUI.ResetUI();
 
-            // --- BUG FIX BAŞLANGICI ---
-            // Süreleri 10 dakikaya geri çek
-            ResetTimers(); 
-            // Sayacın tekrar çalışmasını sağla
-            _isTimerActive = true; 
-            // Görseli anında güncelle (1 kare bile eski süreyi görmesin)
-            _uiManager.UpdateTimerUI(_whiteTime, _blackTime, PieceColor.White);
-            // --- BUG FIX BİTİŞİ ---
+            // --- BUG FIX ---
+             ResetTimers(); 
+             _isTimerActive = true; 
+             _uiManager.UpdateTimerUI(_whiteTime, _blackTime, PieceColor.White);
 
             // 5. Oyunu Baştan Yükle
             LoadGame(FenUtility.StartFen);
