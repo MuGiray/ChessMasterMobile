@@ -8,6 +8,7 @@ namespace Chess.Unity.Managers
     {
         [Header("UI References")]
         [SerializeField] private GameObject _confirmationPanel; // "Devam mı Yeni mi?" paneli
+        [SerializeField] private ProfileUI _profileUI; // Profil Paneli Referansı
 
         private const string GAME_SCENE_NAME = "SampleScene";
         private GameMode _pendingMode; // Kullanıcının girmek istediği mod (Geçici hafıza)
@@ -17,6 +18,19 @@ namespace Chess.Unity.Managers
             // Paneli garanti olsun diye başta kapat
             if (_confirmationPanel != null) _confirmationPanel.SetActive(false);
         }
+
+        // --- YENİ BUTON FONKSİYONLARI ---
+        public void OpenProfile()
+        {
+            if (_profileUI != null) _profileUI.ShowProfile();
+        }
+        
+        // Profil panelindeki "Kapat/X" butonu buna bağlanacak
+        public void CloseProfile()
+        {
+            if (_profileUI != null) _profileUI.HideProfile();
+        }
+        // --------------------------------
 
         // ANA MENÜ BUTONU: 1 Player (AI)
         public void PlayVsAI()
