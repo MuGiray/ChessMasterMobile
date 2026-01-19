@@ -67,6 +67,8 @@ namespace Chess.Unity.Managers
             if (_capturedPiecesUI != null) _capturedPiecesUI.ResetUI();
 
             _aiOpponent = new ChessAI();
+            // Varsayılan zorluk (Medium)
+            _aiOpponent.SetDifficulty(3); 
 
             GameMode currentMode = GameSettings.CurrentMode;
 
@@ -196,16 +198,17 @@ namespace Chess.Unity.Managers
                 {
                     ICommand cmd = new MoveCommand(_board, moveRec.From, moveRec.To, moveRec.Promotion);
                     
-                    // --- YENİ: Kayıtlı PGN Notasyonunu Geri Yükle ---
                     MoveCommand mCmd = cmd as MoveCommand;
-                    if (mCmd != null) mCmd.Notation = moveRec.Notation;
-                    // ------------------------------------------------
+                    if (mCmd != null) 
+                    {
+                        mCmd.Notation = moveRec.Notation;
+                        mCmd.EvaluationScore = moveRec.EvalScore; // YENİ: Skoru geri yükle
+                    }
 
                     cmd.Execute(); 
                     
                     _commandHistory.Push(cmd);
                     
-                    // Captured Piece UI Update
                     if (mCmd != null && mCmd.CapturedPiece.Type != PieceType.None)
                     {
                         _capturedPiecesUI.AddCapturedPiece(mCmd.CapturedPiece);
@@ -295,7 +298,8 @@ namespace Chess.Unity.Managers
             return _validMoves.Exists(m => m.x == target.x && m.y == target.y);
         }
 
-        public void ExecuteMove(Vector2Int from, Vector2Int to)
+        // YENİ: evalScore parametresi eklendi (Opsiyonel)
+        public void ExecuteMove(Vector2Int from, Vector2Int to, int evalScore = 0)
         {
             Piece movedPiece = _board.GetPieceAt(from);
             
@@ -311,22 +315,23 @@ namespace Chess.Unity.Managers
                 _promotionUI.Show(movedPiece.Color, (selectedType) => 
                 {
                     _isPromotionActive = false; 
-                    ExecuteConfirmedMove(from, to, selectedType);
+                    // İnsan hamlesi olduğu için puan şimdilik 0, AI hesaplayacaksa sonra güncellenir
+                    ExecuteConfirmedMove(from, to, selectedType, 0); 
                 });
                 return; 
             }
 
-            ExecuteConfirmedMove(from, to, PieceType.Queen);
+            ExecuteConfirmedMove(from, to, PieceType.Queen, evalScore);
         }
 
-        private void ExecuteConfirmedMove(Vector2Int from, Vector2Int to, PieceType promotionType)
+        private void ExecuteConfirmedMove(Vector2Int from, Vector2Int to, PieceType promotionType, int evalScore)
         {
-            // --- GÜNCELLENDİ: PGN HESAPLAMA (Execute Öncesi) ---
             MoveCommand moveCmd = new MoveCommand(_board, from, to, promotionType);
             
-            // Tahta değişmeden notasyonu al (Örn: "Nf3")
+            // ANALİZ PUANI ENTEGRASYONU
+            moveCmd.EvaluationScore = evalScore;
+
             string pgnMove = NotationConverter.EncodeMove(_board, moveCmd);
-            // ---------------------------------------------------
 
             // Görsel İşlemler
             Piece movedPiece = _board.GetPieceAt(from);
@@ -351,7 +356,6 @@ namespace Chess.Unity.Managers
             _boardView.MovePieceVisual(from, to);
             _boardView.HighlightLastMove(from, to);
 
-            // Rok Görseli
             if (movedPiece.Type == PieceType.King && Mathf.Abs(from.x - to.x) == 2)
             {
                 int rank = from.y;
@@ -361,15 +365,12 @@ namespace Chess.Unity.Managers
                 _boardView.MovePieceVisual(rookFrom, rookTo);
             }
 
-            // Sesler
             if (isCapture) AudioManager.Instance.PlayCapture();
             else AudioManager.Instance.PlayMove();
 
-            // --- KOMUTU ÇALIŞTIR ---
-            moveCmd.Execute(); // Board burada güncelleniyor
+            moveCmd.Execute(); 
             _commandHistory.Push(moveCmd);
 
-            // Titreşim
             MoveCommand castedCmd = moveCmd as MoveCommand;
             if (isCapture || (castedCmd != null && castedCmd.CapturedPiece.Type != PieceType.None))
             {
@@ -380,7 +381,6 @@ namespace Chess.Unity.Managers
                 HapticsManager.Instance.VibrateLight();
             }
 
-            // Piyon Görseli (Promotion)
             Piece pieceAfterMove = _board.GetPieceAt(to);
             if (movedPiece.Type == PieceType.Pawn && pieceAfterMove.Type != PieceType.Pawn)
             {
@@ -390,20 +390,17 @@ namespace Chess.Unity.Managers
 
             CheckGameState();
 
-            // --- GÜNCELLENDİ: PGN SON DURUM (+ veya # Ekleme) ---
             if (_currentGameState == GameState.Checkmate)
             {
                 pgnMove += "#";
             }
-            else if (Arbiter.IsInCheck(_board, _board.Turn)) // Sıra rakipte, onun şahına bakıyoruz
+            else if (Arbiter.IsInCheck(_board, _board.Turn)) 
             {
                 pgnMove += "+";
             }
             
-            // Son halini komuta kaydet
             moveCmd.Notation = pgnMove;
-            Debug.Log($"PGN: {pgnMove}"); 
-            // ----------------------------------------------------
+            Debug.Log($"PGN: {pgnMove} | Eval: {evalScore}"); 
 
             SaveCurrentGame();
 
@@ -421,7 +418,8 @@ namespace Chess.Unity.Managers
         {
             _isAIThinking = true;
             
-            Task<Vector2Int[]> aiTask = _aiOpponent.GetBestMoveAsync(_board);
+            // --- HATA DÜZELTME: Return type artık MoveResult ---
+            Task<MoveResult> aiTask = _aiOpponent.GetBestMoveAsync(_board);
             
             while (!aiTask.IsCompleted)
             {
@@ -430,9 +428,11 @@ namespace Chess.Unity.Managers
 
             yield return _aiDelay;
 
-            if (aiTask.Result != null)
+            if (aiTask.Result.From.x != -1) // Geçerli bir hamle döndüyse
             {
-                ExecuteMove(aiTask.Result[0], aiTask.Result[1]);
+                MoveResult result = aiTask.Result;
+                // Skoru da parametre olarak gönderiyoruz
+                ExecuteMove(result.From, result.To, result.EvalScore);
             }
 
             _isAIThinking = false;
@@ -573,8 +573,8 @@ namespace Chess.Unity.Managers
                 MoveCommand cmd = stackArray[i] as MoveCommand;
                 if (cmd != null)
                 {
-                    // --- GÜNCELLENDİ: Notation Parametresi Eklendi ---
-                    historyList.Add(new MoveRecord(cmd.From, cmd.To, cmd.PromotionType, cmd.Notation));
+                    // YENİ: EvalScore eklendi
+                    historyList.Add(new MoveRecord(cmd.From, cmd.To, cmd.PromotionType, cmd.Notation, cmd.EvaluationScore));
                 }
             }
 

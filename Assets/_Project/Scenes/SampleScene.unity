@@ -4237,10 +4237,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d046027f3071b5f48b9d643aa22283ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Chess.Unity.Managers.AudioManager
-  _moveClip: {fileID: 0}
-  _captureClip: {fileID: 0}
-  _notifyClip: {fileID: 0}
-  _gameOverClip: {fileID: 0}
+  _moveClip: {fileID: 8300000, guid: bdbd37c60347be8429dbb647c0771920, type: 3}
+  _captureClip: {fileID: 8300000, guid: b48afc7feb352204ab18121c9b39fe3e, type: 3}
+  _notifyClip: {fileID: 8300000, guid: 76412e7e52df03641b4863e3e3085383, type: 3}
+  _gameOverClip: {fileID: 8300000, guid: e2a5f606c50860b44a6aff49fec2d6fa, type: 3}
 --- !u!82 &2105567844
 AudioSource:
   m_ObjectHideFlags: 0

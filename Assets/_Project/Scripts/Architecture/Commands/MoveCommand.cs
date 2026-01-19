@@ -17,6 +17,7 @@ namespace Chess.Architecture.Commands
 
         // Properties
         public string Notation { get; set; }
+        public int EvaluationScore { get; set; } // Analiz için puan
         public Vector2Int From => _from;
         public Vector2Int To => _to;
         public PieceType PromotionType => _promotionType;

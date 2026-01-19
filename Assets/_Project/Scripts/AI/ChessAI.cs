@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Chess.Core.Models;
 using Chess.Core.Logic;
+using Chess.Architecture.Commands; // MoveCommand için
 using Vector2Int = Chess.Core.Models.Vector2Int;
 using System;
 
@@ -10,11 +11,10 @@ namespace Chess.Core.AI
 {
     public class ChessAI
     {
-        private const int MAX_DEPTH = 3; 
+        // Zorluk seviyesine göre derinlik (Easy:2, Medium:3, Hard:4)
+        private int _searchDepth = 3; 
 
-        // OPTİMİZASYON: Dictionary yerine Array kullanımı (O(1) ve çok hızlı)
-        // PieceType enum değerlerine karşılık gelen puanlar.
-        // None=0, Pawn=1, Knight=2, Bishop=3, Rook=4, Queen=5, King=6
+        // EVALUATION: Bu değerleri daha sonra Evaluation.cs'ye taşıyacağız ama şimdilik burada kalsın.
         private readonly int[] _pieceValues = new int[] 
         { 
             0,      // None
@@ -26,56 +26,66 @@ namespace Chess.Core.AI
             20000   // King
         };
 
-        public async Task<Vector2Int[]> GetBestMoveAsync(Board board)
+        public void SetDifficulty(int depth)
         {
-            // KRİTİK DÜZELTME: Ana tahtayı kopyala (Clone).
-            // Böylece AI arka planda düşünürken ana oyun etkilenmez.
+            _searchDepth = depth;
+        }
+
+        public async Task<MoveResult> GetBestMoveAsync(Board board)
+        {
+            // Ana tahtayı kopyala ki UI'daki oyun etkilenmesin
             Board boardClone = board.Clone();
 
             return await Task.Run(() => 
             {
-                Move bestMove = CalculateBestMove(boardClone, MAX_DEPTH, int.MinValue, int.MaxValue, false);
-                return new Vector2Int[] { bestMove.From, bestMove.To };
+                Move bestMove = CalculateBestMove(boardClone, _searchDepth, int.MinValue, int.MaxValue, true); // true = AI (White/Black farketmez, maximize eden taraf)
+                return new MoveResult(bestMove.From, bestMove.To, bestMove.Score);
             });
         }
 
-        private Move CalculateBestMove(Board board, int depth, int alpha, int beta, bool isMaximizingPlayer)
+        private Move CalculateBestMove(Board board, int depth, int alpha, int beta, bool isMaximizing)
         {
             if (depth == 0) return new Move(EvaluateBoard(board));
 
-            // Not: GetAllPieces performansı PieceList mimarisi olmadığı için O(64)'tür.
-            // Ancak şu an için kabul edilebilir.
-            List<Vector2Int> allPieces = GetAllPieces(board, isMaximizingPlayer ? PieceColor.White : PieceColor.Black);
+            // Optimist yaklaşım: Önce taş yiyen hamlelere bakılmalı (Move Ordering)
+            // Şimdilik standart PseudoLegal alıyoruz.
+            List<Vector2Int> pieces = GetAllPieces(board, board.Turn);
             
-            Move bestMove = new Move(isMaximizingPlayer ? int.MinValue : int.MaxValue);
-            
-            // Eğer hiç taş yoksa veya hamle yoksa (Mat/Pat durumu), mevcut skoru döndür
-            if (allPieces.Count == 0) return new Move(EvaluateBoard(board));
+            Move bestMove = new Move(isMaximizing ? int.MinValue : int.MaxValue);
+            bool hasMove = false;
 
-            foreach (Vector2Int from in allPieces)
+            foreach (Vector2Int from in pieces)
             {
                 var moves = MoveGenerator.GetPseudoLegalMoves(board, from);
 
                 foreach (Vector2Int to in moves)
                 {
-                    Piece movedPiece = board.GetPieceAt(from);
-                    Piece capturedPiece = board.GetPieceAt(to);
-
-                    // Kral yeme kontrolü (Illegal durum yakalama - PseudoLegal olduğu için Kral yenebilir gibi görünür)
-                    if (capturedPiece.Type == PieceType.King) 
-                         return new Move(isMaximizingPlayer ? 100000 : -100000, from, to);
-
-                    // Simülasyon
-                    board.SetPieceAt(to, movedPiece);
-                    board.SetPieceAt(from, new Piece(PieceType.None, PieceColor.None));
+                    // KRİTİK DÜZELTME: SetPieceAt yerine MoveCommand kullan.
+                    // Bu, Rok haklarını ve oyun durumunu doğru yönetir.
+                    // AI analizinde Promotion hep Vezir varsayılır (Basitleştirme).
+                    MoveCommand cmd = new MoveCommand(board, from, to, PieceType.Queen);
                     
-                    Move childMove = CalculateBestMove(board, depth - 1, alpha, beta, !isMaximizingPlayer);
+                    // Kendi şahımızı tehlikeye atıyor muyuz? (PseudoLegal kontrolü)
+                    // MoveCommand içinde Execute yapıp sonra geri alacağız ama
+                    // Execute yapmadan önce basit bir kontrol maliyetli olur.
+                    // En güvenlisi: Oyna -> Şah kontrolü yap -> Geri al.
                     
-                    // Geri Al (Backtracking)
-                    board.SetPieceAt(from, movedPiece);
-                    board.SetPieceAt(to, capturedPiece);
+                    cmd.Execute();
 
-                    if (isMaximizingPlayer)
+                    // Eğer hamle illegal ise (Şah yiyorsa veya kendi şahını açıyorsa) geri al ve geç
+                    if (IsKingInCheck(board, !isMaximizing)) // Hamleyi yapan taraf (sıra değiştiği için !isMaximizing) şah altında mı?
+                    {
+                        cmd.Undo();
+                        continue;
+                    }
+                    
+                    hasMove = true;
+
+                    Move childMove = CalculateBestMove(board, depth - 1, alpha, beta, !isMaximizing);
+                    
+                    cmd.Undo(); // Tahtayı eski haline getir
+
+                    if (isMaximizing)
                     {
                         if (childMove.Score > bestMove.Score)
                         {
@@ -96,21 +106,36 @@ namespace Chess.Core.AI
                         beta = Math.Min(beta, bestMove.Score);
                     }
 
-                    if (beta <= alpha) break; // Alpha-Beta Pruning
+                    if (beta <= alpha) break;
                 }
                 if (beta <= alpha) break;
             }
 
-            // Eğer hiç geçerli hamle bulunamadıysa (ama taş varsa), en iyi skor olarak mevcut durumu dön
-            if (bestMove.From.x == -1) return new Move(EvaluateBoard(board));
+            if (!hasMove)
+            {
+                // Mat veya Pat durumu
+                if (Arbiter.IsInCheck(board, board.Turn))
+                    return new Move(isMaximizing ? -100000 + depth : 100000 - depth); // Mat (Derinlik avantajı ile)
+                else
+                    return new Move(0); // Pat (Draw)
+            }
 
             return bestMove;
+        }
+
+        private bool IsKingInCheck(Board board, bool wasMaximizingPlayer)
+        {
+            // Hamleyi yapan tarafın şahı tehdit altında mı?
+            // Not: MoveCommand sonrası Turn değişti. O yüzden "önceki" oyuncunun rengine bakacağız.
+            // Ama Board.Turn zaten değişmiş durumda. 
+            // Eğer White oynadıysa, şimdi sıra Black. White King kontrol edilmeli.
+            PieceColor justMovedColor = (board.Turn == PieceColor.White) ? PieceColor.Black : PieceColor.White;
+            return Arbiter.IsInCheck(board, justMovedColor);
         }
 
         private int EvaluateBoard(Board board)
         {
             int score = 0;
-            // Dizi erişimi Dictionary'den çok daha hızlıdır
             for (int x = 0; x < 8; x++)
             {
                 for (int y = 0; y < 8; y++)
@@ -118,12 +143,13 @@ namespace Chess.Core.AI
                     Piece p = board.GetPieceAt(new Vector2Int(x, y));
                     if (p.Type != PieceType.None)
                     {
-                        // Array lookup optimizasyonu
                         int value = _pieceValues[(int)p.Type];
                         score += (p.Color == PieceColor.White) ? value : -value;
                     }
                 }
             }
+            // Siyah için skoru tersine çevirmiyoruz, Minimax (Negamax değil) kullanıyoruz.
+            // White pozitif, Black negatif sever.
             return score;
         }
 
@@ -141,14 +167,28 @@ namespace Chess.Core.AI
             return pieces;
         }
 
+        // Helper structs
         private struct Move
         {
             public int Score;
             public Vector2Int From;
             public Vector2Int To;
-
             public Move(int score) { Score = score; From = new Vector2Int(-1,-1); To = new Vector2Int(-1, -1); }
-            public Move(int score, Vector2Int from, Vector2Int to) { Score = score; From = from; To = to; }
+        }
+    }
+
+    // UI'a dönecek sonuç paketi
+    public struct MoveResult
+    {
+        public Vector2Int From;
+        public Vector2Int To;
+        public int EvalScore; // Analiz için puanı burada taşıyacağız
+
+        public MoveResult(Vector2Int from, Vector2Int to, int score)
+        {
+            From = from;
+            To = to;
+            EvalScore = score;
         }
     }
 }
