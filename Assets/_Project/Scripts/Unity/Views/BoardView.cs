@@ -220,5 +220,19 @@ namespace Chess.Unity.Views
         }
 
         #endregion
+
+        // --- RESPONSIVE UI SİSTEMİ İÇİN EKLEMELER ---
+        
+        // Tahtanın en üst noktasının Y koordinatı (Kare 7'nin üst kenarı)
+        public float GetBoardTopY()
+        {
+            return 7.5f; // Kare merkezi 7.0 + yarım birim 0.5
+        }
+
+        // Tahtanın en alt noktasının Y koordinatı (Kare 0'ın alt kenarı)
+        public float GetBoardBottomY()
+        {
+            return -0.5f; // Kare merkezi 0.0 - yarım birim 0.5
+        }
     }
 }
