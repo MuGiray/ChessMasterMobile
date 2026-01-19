@@ -68,8 +68,16 @@ namespace Chess.Unity.Managers
             if (_capturedPiecesUI != null) _capturedPiecesUI.ResetUI();
 
             _aiOpponent = new ChessAI();
-            // Varsayılan zorluk (Medium)
-            _aiOpponent.SetDifficulty(3); 
+            // Adaptif Zorluk
+            if (GameSettings.CurrentMode == GameMode.HumanVsAI)
+            {
+                UserProfile profile = ProfileManager.GetProfile();
+                _aiOpponent.AdaptToELO(profile.ELO);
+            }
+            else
+            {
+                _aiOpponent.SetDifficulty(3); // 2 Kişilik modda standart kalabilir veya kullanılmaz
+            }
 
             GameMode currentMode = GameSettings.CurrentMode;
 
@@ -455,35 +463,10 @@ namespace Chess.Unity.Managers
         {
             _currentGameState = Arbiter.CheckGameState(_board);
 
-            if (_currentGameState == GameState.Checkmate)
+            // Eğer oyun bittiyse İstatistik Güncelle
+            if (_currentGameState != GameState.InProgress)
             {
-                HapticsManager.Instance.VibrateHeavy();
-                AudioManager.Instance.PlayGameOver();
-                
-                string winnerName = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
-                _uiManager.ShowGameOver($"{winnerName} WINS!");
-                
-                SaveManager.DeleteSave(GameSettings.CurrentMode);
-            }
-            else if (_currentGameState == GameState.Draw)
-            {
-                HapticsManager.Instance.VibrateHeavy();
-                AudioManager.Instance.PlayGameOver();
-
-                string reason = "(Draw)";
-                if (Arbiter.IsThreefoldRepetition(_board)) reason = "(3-Fold Repetition)";
-                else if (Arbiter.IsDrawByFiftyMoveRule(_board)) reason = "(50-Move Rule)";
-
-                _uiManager.ShowGameOver($"GAME DRAWN\n{reason}");
-                SaveManager.DeleteSave(GameSettings.CurrentMode);
-            }
-            else if (_currentGameState == GameState.Stalemate)
-            {
-                HapticsManager.Instance.VibrateHeavy();
-                AudioManager.Instance.PlayGameOver();
-                
-                _uiManager.ShowGameOver("GAME DRAWN\n(Stalemate)");
-                SaveManager.DeleteSave(GameSettings.CurrentMode);
+                HandleGameOver(_currentGameState); // YENİ: Tüm bitiş işlemlerini buraya taşıyalım
             }
             else
             {
@@ -493,6 +476,51 @@ namespace Chess.Unity.Managers
                     AudioManager.Instance.PlayNotify();
                 }
             }
+        }
+
+        // YENİ METOD: Oyun bitişini temiz bir şekilde yönetir
+        private void HandleGameOver(GameState state)
+        {
+            AudioManager.Instance.PlayGameOver();
+            SaveManager.DeleteSave(GameSettings.CurrentMode);
+
+            // 1. Mesajı Hazırla
+            string msg = "";
+            if (state == GameState.Checkmate)
+            {
+                HapticsManager.Instance.VibrateHeavy();
+                string winnerName = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
+                msg = $"{winnerName} WINS!";
+                
+                // 2. İstatistik Güncelle (Sadece Human vs AI ise)
+                if (GameSettings.CurrentMode == GameMode.HumanVsAI)
+                {
+                    // Eğer Beyaz (İnsan) sıradaysa ve Mat olduysa -> KAYBETTİ (-1)
+                    // Eğer Siyah (AI) sıradaysa ve Mat olduysa -> KAZANDI (1)
+                    int result = (_board.Turn == PieceColor.White) ? -1 : 1;
+                    
+                    // Zorluk seviyesini (Basitçe ELO'ya göre 1-3 arası veriyoruz)
+                    int difficulty = 2; // Orta
+                    UserProfile p = ProfileManager.GetProfile();
+                    if (p.ELO < 1000) difficulty = 1;
+                    else if (p.ELO > 1500) difficulty = 3;
+
+                    ProfileManager.UpdateStats(result, difficulty);
+                }
+            }
+            else // Beraberlik Durumları
+            {
+                HapticsManager.Instance.VibrateHeavy();
+                if (state == GameState.Stalemate) msg = "DRAW\n(Stalemate)";
+                else msg = "DRAW"; // Diğer sebepler
+
+                if (GameSettings.CurrentMode == GameMode.HumanVsAI)
+                {
+                    ProfileManager.UpdateStats(0, 2); // 0 = Berabere
+                }
+            }
+
+            _uiManager.ShowGameOver(msg);
         }
 
         public void SetPaused(bool paused)

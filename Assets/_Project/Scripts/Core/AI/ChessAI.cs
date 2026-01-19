@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Chess.Core.Models;
 using Chess.Core.Logic;
-using Chess.Architecture.Commands;
 using Vector2Int = Chess.Core.Models.Vector2Int;
 using System;
 
@@ -11,8 +10,37 @@ namespace Chess.Core.AI
 {
     public class ChessAI
     {
-        // Zorluk seviyesine göre derinlik (Easy:2, Medium:3, Hard:4)
-        private int _searchDepth = 3; 
+        private int _searchDepth = 3;
+        private int _contemptFactor = 0; // Beraberlikten kaçınma isteği (Puan)
+
+        // Materyal Değerleri
+        private readonly int[] _pieceValues = new int[] 
+        { 
+            0, 100, 320, 330, 500, 900, 20000
+        };
+
+        // --- ADAPTİF ZORLUK AYARI ---
+        public void AdaptToELO(int playerELO)
+        {
+            // ELO'ya göre AI Profili belirle
+            if (playerELO < 1000)
+            {
+                _searchDepth = 2; // Acemi: Sadece 2 hamle sonrasını görür (Hata yapar)
+                _contemptFactor = 50; // Risk alır
+            }
+            else if (playerELO < 1500)
+            {
+                _searchDepth = 3; // Orta: Standart oyun
+                _contemptFactor = 20;
+            }
+            else
+            {
+                _searchDepth = 4; // Usta: Çok derin hesaplar
+                _contemptFactor = 0; // Soğukkanlı oynar
+            }
+
+            Debug.Log($"AI Adapted to ELO {playerELO}. Depth: {_searchDepth}, Contempt: {_contemptFactor}");
+        }
 
         public void SetDifficulty(int depth)
         {
@@ -32,18 +60,33 @@ namespace Chess.Core.AI
             });
         }
 
+        // Mevcut pozisyonu analiz etmek için
+        public int GetPositionScore(Board board, int depth)
+        {
+            Board boardClone = board.Clone();
+            bool isMaximizing = (boardClone.Turn == PieceColor.White);
+            Move result = CalculateBestMove(boardClone, depth, int.MinValue, int.MaxValue, isMaximizing);
+            return result.Score;
+        }
+
         private Move CalculateBestMove(Board board, int depth, int alpha, int beta, bool isMaximizing)
         {
             if (depth == 0) 
             {
-                // Evaluation sınıfı artık hatasız çalışacak
-                return new Move(Evaluation.Evaluate(board));
+                int eval = Evaluation.Evaluate(board);
+                return new Move(eval);
             }
 
             List<Vector2Int> pieces = GetAllPieces(board, board.Turn);
-            
             Move bestMove = new Move(isMaximizing ? int.MinValue : int.MaxValue);
             bool hasMove = false;
+
+            // TEKRAR KONTROLÜ (Repetition Check)
+            if (Arbiter.IsThreefoldRepetition(board))
+            {
+                int drawScore = isMaximizing ? -_contemptFactor : _contemptFactor;
+                return new Move(drawScore);
+            }
 
             foreach (Vector2Int from in pieces)
             {
@@ -51,20 +94,22 @@ namespace Chess.Core.AI
 
                 foreach (Vector2Int to in moves)
                 {
-                    MoveCommand cmd = new MoveCommand(board, from, to, PieceType.Queen);
+                    Chess.Architecture.Commands.MoveCommand cmd = 
+                        new Chess.Architecture.Commands.MoveCommand(board, from, to, PieceType.Queen);
+                    
                     cmd.Execute();
 
-                    if (IsKingInCheck(board, !isMaximizing)) 
+                    if (IsKingInCheck(board, !isMaximizing))
                     {
                         cmd.Undo();
                         continue;
                     }
-                    
+
                     hasMove = true;
 
                     Move childMove = CalculateBestMove(board, depth - 1, alpha, beta, !isMaximizing);
                     
-                    cmd.Undo(); 
+                    cmd.Undo();
 
                     if (isMaximizing)
                     {
@@ -76,7 +121,7 @@ namespace Chess.Core.AI
                         }
                         alpha = Math.Max(alpha, bestMove.Score);
                     }
-                    else 
+                    else
                     {
                         if (childMove.Score < bestMove.Score)
                         {
@@ -95,9 +140,9 @@ namespace Chess.Core.AI
             if (!hasMove)
             {
                 if (Arbiter.IsInCheck(board, board.Turn))
-                    return new Move(isMaximizing ? -100000 + depth : 100000 - depth); 
+                    return new Move(isMaximizing ? -100000 + depth : 100000 - depth); // Mat
                 else
-                    return new Move(0); 
+                    return new Move(0); // Pat
             }
 
             return bestMove;
@@ -130,25 +175,9 @@ namespace Chess.Core.AI
             public Vector2Int To;
             public Move(int score) { Score = score; From = new Vector2Int(-1,-1); To = new Vector2Int(-1, -1); }
         }
-
-        // Mevcut tahtanın puanını (Search yaparak) hesaplar
-        public int GetPositionScore(Board board, int depth)
-        {
-            // Tahtayı kopyala (Oyun bozulmasın)
-            Board boardClone = board.Clone();
-            
-            // Sıra kimdeyse onun açısından en iyi hamleyi (ve puanını) bul
-            // White ise Maximize, Black ise Minimize etmeye çalışacak.
-            bool isMaximizing = (boardClone.Turn == PieceColor.White);
-            
-            // Alpha-Beta algoritmasını çalıştır
-            Move result = CalculateBestMove(boardClone, depth, int.MinValue, int.MaxValue, isMaximizing);
-            
-            return result.Score;
-        }
     }
 
-    // HATA ÇÖZÜMÜ: Struct tanımı buraya eklendi
+    // --- EKSİK OLAN YAPI BURAYA EKLENDİ ---
     public struct MoveResult
     {
         public Vector2Int From;
