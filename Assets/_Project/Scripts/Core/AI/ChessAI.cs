@@ -130,6 +130,22 @@ namespace Chess.Core.AI
             public Vector2Int To;
             public Move(int score) { Score = score; From = new Vector2Int(-1,-1); To = new Vector2Int(-1, -1); }
         }
+
+        // Mevcut tahtanın puanını (Search yaparak) hesaplar
+        public int GetPositionScore(Board board, int depth)
+        {
+            // Tahtayı kopyala (Oyun bozulmasın)
+            Board boardClone = board.Clone();
+            
+            // Sıra kimdeyse onun açısından en iyi hamleyi (ve puanını) bul
+            // White ise Maximize, Black ise Minimize etmeye çalışacak.
+            bool isMaximizing = (boardClone.Turn == PieceColor.White);
+            
+            // Alpha-Beta algoritmasını çalıştır
+            Move result = CalculateBestMove(boardClone, depth, int.MinValue, int.MaxValue, isMaximizing);
+            
+            return result.Score;
+        }
     }
 
     // HATA ÇÖZÜMÜ: Struct tanımı buraya eklendi

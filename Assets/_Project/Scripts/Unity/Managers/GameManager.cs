@@ -20,6 +20,7 @@ namespace Chess.Unity.Managers
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private CapturedPiecesUI _capturedPiecesUI;
         [SerializeField] private PromotionUI _promotionUI;
+        [SerializeField] private AnalysisUI _analysisUI;
 
         // Core Components
         private Board _board;
@@ -371,6 +372,18 @@ namespace Chess.Unity.Managers
             moveCmd.Execute(); 
             _commandHistory.Push(moveCmd);
 
+            // EĞER EVAL SCORE 0 İSE (İnsan Oynadıysa) HESAPLA
+            if (evalScore == 0)
+            {
+                // Evaluation sınıfı statik analiz yapar (Derinlik yok ama insan hatasını yakalar)
+                moveCmd.EvaluationScore = _aiOpponent.GetPositionScore(_board, 2);
+            }
+            else
+            {
+                moveCmd.EvaluationScore = evalScore; // AI zaten hesapladı
+            }
+            // ----------------------------------------------------
+
             MoveCommand castedCmd = moveCmd as MoveCommand;
             if (isCapture || (castedCmd != null && castedCmd.CapturedPiece.Type != PieceType.None))
             {
@@ -619,5 +632,50 @@ namespace Chess.Unity.Managers
         }
 
         #endregion
+
+        public void AnalyzeGame()
+        {            
+            // YENİ YÖNTEM: Doğrudan hafızadaki canlı veriyi kullanıyoruz.
+            
+            if (_commandHistory == null || _commandHistory.Count == 0) 
+            {
+                Debug.LogWarning("Analiz edilecek hamle geçmişi yok.");
+                return;
+            }
+
+            // 1. Stack'i Listeye çevir (SaveCurrentGame'deki mantığın aynısı)
+            // Stack LIFO (Last In First Out) olduğu için tersten döngü kuruyoruz.
+            ICommand[] stackArray = _commandHistory.ToArray();
+            List<MoveRecord> historyList = new List<MoveRecord>();
+
+            for (int i = stackArray.Length - 1; i >= 0; i--)
+            {
+                MoveCommand cmd = stackArray[i] as MoveCommand;
+                if (cmd != null)
+                {
+                    // Hamle verisini paketle
+                    historyList.Add(new MoveRecord(
+                        cmd.From, 
+                        cmd.To, 
+                        cmd.PromotionType, 
+                        cmd.Notation, 
+                        cmd.EvaluationScore
+                    ));
+                }
+            }
+
+            // 2. Dedektifi çağır (Analiz)
+            Chess.Core.AI.GameReport report = Chess.Core.AI.GameAnalyst.Analyze(historyList);
+            
+            // 3. Sonucu Ekrana Bas
+            if (_analysisUI != null)
+            {
+                _analysisUI.ShowReport(report);
+            }
+            else
+            {
+                Debug.LogError("AnalysisUI referansı GameManager'da atanmamış!");
+            }
+        }
     }
 }
