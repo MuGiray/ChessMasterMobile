@@ -33,7 +33,6 @@ namespace Chess.Unity.Managers
         private const float START_TIME = 600f; 
         private bool _isTimerActive = false;
         
-        // OPTİMİZASYON İÇİN EKLENEN DEĞİŞKENLER
         private int _lastWhiteSecond;
         private int _lastBlackSecond;
 
@@ -93,12 +92,11 @@ namespace Chess.Unity.Managers
             }
             else
             {
-                ResetTimers(); // Yeni oyunsa da timerları sıfırla
+                ResetTimers();
                 LoadGame(FenUtility.StartFen);
-                _isTimerActive = true; // Yeni oyunda da timer başlasın
+                _isTimerActive = true;
             }
             
-            // İlk açılışta UI'ı bir kez zorla güncelle
             _uiManager.UpdateTimerUI(_whiteTime, _blackTime, _board.Turn);
         }
 
@@ -106,7 +104,6 @@ namespace Chess.Unity.Managers
         {
             if (_currentGameState != GameState.InProgress || _isPaused || !_isTimerActive) return;
 
-            // Zamanı Azalt
             if (_board.Turn == PieceColor.White)
             {
                 _whiteTime -= Time.deltaTime;
@@ -118,8 +115,6 @@ namespace Chess.Unity.Managers
                 if (_blackTime <= 0) HandleTimeout(PieceColor.Black);
             }
 
-            // --- OPTİMİZASYON ---
-            // Sadece saniye değiştiğinde UI güncelle (Performans + Battery Saver)
             int currentWhiteCeil = Mathf.CeilToInt(_whiteTime);
             int currentBlackCeil = Mathf.CeilToInt(_blackTime);
 
@@ -136,12 +131,9 @@ namespace Chess.Unity.Managers
             _isTimerActive = false;
             _currentGameState = GameState.Checkmate; 
             
-            // SÜRE BİTİNCE DE GAME OVER SESİ ÇALSIN
             AudioManager.Instance.PlayGameOver(); 
             
             string winner = (loserColor == PieceColor.White) ? "Black" : "White";
-            Debug.Log($"TIME OUT! {winner} Wins!");
-            
             _uiManager.ShowGameOver($"{winner} Wins by Timeout!");
             
             SaveManager.DeleteSave(GameSettings.CurrentMode);
@@ -157,17 +149,14 @@ namespace Chess.Unity.Managers
 
         private void LoadGame(string fen)
         {
-            _initialFen = fen; // Başlangıç noktamızı hatırla
-            
+            _initialFen = fen;
             FenUtility.LoadPositionFromFen(_board, fen);
-            RefreshBoardVisuals(); // Görseli güncelle
-            
+            RefreshBoardVisuals();
             Debug.Log("Game Loaded from FEN.");
         }
 
         public void RestartGame()
         {
-            // 1. ZAMANI VE DURUMU DÜZELT
             if (_isPaused)
             {
                 Time.timeScale = 1f;
@@ -175,13 +164,9 @@ namespace Chess.Unity.Managers
                 _uiManager.HidePause();
             }
 
-            // 2. UI Temizliği
             _uiManager.HideGameOver();
-            
-            // 3. Kaydı Sil
             SaveManager.DeleteSave(GameSettings.CurrentMode);
             
-            // 4. State Reset
             _currentGameState = GameState.InProgress;
             _selectedSquare = new Vector2Int(-1, -1);
             _validMoves.Clear();
@@ -191,61 +176,52 @@ namespace Chess.Unity.Managers
             _boardView.HideLastMoveHighlights();
             _capturedPiecesUI.ResetUI();
 
-            // --- BUG FIX ---
              ResetTimers(); 
              _isTimerActive = true; 
              _uiManager.UpdateTimerUI(_whiteTime, _blackTime, PieceColor.White);
 
-            // 5. Oyunu Baştan Yükle
             LoadGame(FenUtility.StartFen);
-            
-            // 6. Temiz başlangıcı kaydet
             SaveCurrentGame(); 
         }
 
         private void ReplayGame(SaveData data)
         {
-            // 1. Tahtayı BAŞLANGIÇ konumuna getir (SaveData'daki InitialFen)
-            // Eğer save eski versiyonsa ve InitialFen yoksa StartFen kullan.
             string startFen = string.IsNullOrEmpty(data.InitialFen) ? FenUtility.StartFen : data.InitialFen;
-            
             _initialFen = startFen;
             FenUtility.LoadPositionFromFen(_board, startFen);
             
-            // 2. Hamleleri sırayla tekrar oyna (MANTIK ONLY)
             if (data.MoveHistory != null)
             {
                 foreach (var moveRec in data.MoveHistory)
                 {
-                    // Komutu oluştur
                     ICommand cmd = new MoveCommand(_board, moveRec.From, moveRec.To, moveRec.Promotion);
                     
-                    // Çalıştır (Bu board state'i günceller)
-                    cmd.Execute();
+                    // --- YENİ: Kayıtlı PGN Notasyonunu Geri Yükle ---
+                    MoveCommand mCmd = cmd as MoveCommand;
+                    if (mCmd != null) mCmd.Notation = moveRec.Notation;
+                    // ------------------------------------------------
+
+                    cmd.Execute(); 
                     
-                    // Geçmişe ekle (Böylece Undo çalışır!)
                     _commandHistory.Push(cmd);
                     
-                    // Yenen taş varsa UI'a ekle (Görsel tutarlılık için)
-                    MoveCommand mCmd = cmd as MoveCommand;
+                    // Captured Piece UI Update
                     if (mCmd != null && mCmd.CapturedPiece.Type != PieceType.None)
                     {
                         _capturedPiecesUI.AddCapturedPiece(mCmd.CapturedPiece);
                     }
-                    // En Passant UI da eklenebilir ama Load hızı için kritik değil, 
-                    // Undo yapınca zaten düzelecek.
                 }
             }
 
-            // 3. Görseli SON haliye güncelle
             RefreshBoardVisuals();
             
-            // 4. Son hamle sarı çerçevesini koy
             if (data.MoveHistory != null && data.MoveHistory.Count > 0)
             {
                 var lastMove = data.MoveHistory[data.MoveHistory.Count - 1];
                 _boardView.HighlightLastMove(lastMove.From, lastMove.To);
             }
+            
+            CheckGameState();
 
             Debug.Log($"Replay Complete. {data.MoveHistory?.Count} moves restored.");
         }
@@ -254,7 +230,6 @@ namespace Chess.Unity.Managers
 
         public void OnSquareSelected(Vector2Int coords)
         {
-            // ... (Güvenlik kontrolleri aynen kalsın) ...
             if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive || _isPaused) return;
             if (GameSettings.CurrentMode == GameMode.HumanVsAI && _board.Turn == PieceColor.Black) return;
 
@@ -277,10 +252,7 @@ namespace Chess.Unity.Managers
                 }
                 else
                 {
-                    // GEÇERSİZ HAMLE
-                    // Rakibe veya boşa tıkladı ama oraya gidemiyor.
-                    HapticsManager.Instance.VibrateError(); // "BIZZ" (Hata)
-                    
+                    HapticsManager.Instance.VibrateError();
                     DeselectPiece();
                 }
             }
@@ -320,8 +292,6 @@ namespace Chess.Unity.Managers
 
         private bool IsMoveValid(Vector2Int target)
         {
-            // List.Contains yerine döngü daha performanslı olabilir ama bu liste çok küçük (max 27).
-            // Kod okunabilirliği için Exists kullanabiliriz.
             return _validMoves.Exists(m => m.x == target.x && m.y == target.y);
         }
 
@@ -337,11 +307,10 @@ namespace Chess.Unity.Managers
 
             if (isPromotion && isHumanPlayer)
             {
-                _isPromotionActive = true; // KİLİTLE: Artık tahtaya tıklanamaz
-                
+                _isPromotionActive = true; 
                 _promotionUI.Show(movedPiece.Color, (selectedType) => 
                 {
-                    _isPromotionActive = false; // KİLİDİ AÇ: Seçim yapıldı
+                    _isPromotionActive = false; 
                     ExecuteConfirmedMove(from, to, selectedType);
                 });
                 return; 
@@ -350,9 +319,16 @@ namespace Chess.Unity.Managers
             ExecuteConfirmedMove(from, to, PieceType.Queen);
         }
 
-        // Asıl işi yapan metod (Eski ExecuteMove içeriği buraya taşındı)
         private void ExecuteConfirmedMove(Vector2Int from, Vector2Int to, PieceType promotionType)
         {
+            // --- GÜNCELLENDİ: PGN HESAPLAMA (Execute Öncesi) ---
+            MoveCommand moveCmd = new MoveCommand(_board, from, to, promotionType);
+            
+            // Tahta değişmeden notasyonu al (Örn: "Nf3")
+            string pgnMove = NotationConverter.EncodeMove(_board, moveCmd);
+            // ---------------------------------------------------
+
+            // Görsel İşlemler
             Piece movedPiece = _board.GetPieceAt(from);
             Piece targetPiece = _board.GetPieceAt(to);
             bool isCapture = targetPiece.Type != PieceType.None;
@@ -372,11 +348,10 @@ namespace Chess.Unity.Managers
                 _boardView.RemovePieceVisual(capturedPos);
             }
 
-            // GÖRSEL HAREKET
             _boardView.MovePieceVisual(from, to);
             _boardView.HighlightLastMove(from, to);
 
-            // CASTLING GÖRSELİ
+            // Rok Görseli
             if (movedPiece.Type == PieceType.King && Mathf.Abs(from.x - to.x) == 2)
             {
                 int rank = from.y;
@@ -386,30 +361,26 @@ namespace Chess.Unity.Managers
                 _boardView.MovePieceVisual(rookFrom, rookTo);
             }
 
-            // SESLER
+            // Sesler
             if (isCapture) AudioManager.Instance.PlayCapture();
             else AudioManager.Instance.PlayMove();
 
-            // --- COMMAND EXECUTION (Güncellendi) ---
-            // Seçilen promotionType'ı gönderiyoruz
-            ICommand moveCmd = new MoveCommand(_board, from, to, promotionType);
-            moveCmd.Execute();
+            // --- KOMUTU ÇALIŞTIR ---
+            moveCmd.Execute(); // Board burada güncelleniyor
             _commandHistory.Push(moveCmd);
 
-            // -> TİTREŞİM BURAYA EKLENİYOR <-
-            // Hamle yapıldı, peki taş yendi mi?
+            // Titreşim
             MoveCommand castedCmd = moveCmd as MoveCommand;
             if (isCapture || (castedCmd != null && castedCmd.CapturedPiece.Type != PieceType.None))
             {
-                HapticsManager.Instance.VibrateMedium(); // Taş Yeme = Tok Titreşim
+                HapticsManager.Instance.VibrateMedium();
             }
             else
             {
-                HapticsManager.Instance.VibrateLight(); // Normal Hamle = Hafif Tık
+                HapticsManager.Instance.VibrateLight();
             }
-            // ------------------------------
 
-            // GÖRSEL DÜZELTME (Piyon -> Seçilen Taş)
+            // Piyon Görseli (Promotion)
             Piece pieceAfterMove = _board.GetPieceAt(to);
             if (movedPiece.Type == PieceType.Pawn && pieceAfterMove.Type != PieceType.Pawn)
             {
@@ -419,11 +390,23 @@ namespace Chess.Unity.Managers
 
             CheckGameState();
 
-            // --- AUTO SAVE ---
-            SaveCurrentGame();
-            // -----------------
+            // --- GÜNCELLENDİ: PGN SON DURUM (+ veya # Ekleme) ---
+            if (_currentGameState == GameState.Checkmate)
+            {
+                pgnMove += "#";
+            }
+            else if (Arbiter.IsInCheck(_board, _board.Turn)) // Sıra rakipte, onun şahına bakıyoruz
+            {
+                pgnMove += "+";
+            }
+            
+            // Son halini komuta kaydet
+            moveCmd.Notation = pgnMove;
+            Debug.Log($"PGN: {pgnMove}"); 
+            // ----------------------------------------------------
 
-            // AI TETİKLEME
+            SaveCurrentGame();
+
             if (_currentGameState == GameState.InProgress && _board.Turn == PieceColor.Black && GameSettings.CurrentMode == GameMode.HumanVsAI)
             {
                 StartCoroutine(TriggerAI());
@@ -440,13 +423,11 @@ namespace Chess.Unity.Managers
             
             Task<Vector2Int[]> aiTask = _aiOpponent.GetBestMoveAsync(_board);
             
-            // Task bitene kadar bekle (Thread blocking yapmaz)
             while (!aiTask.IsCompleted)
             {
                 yield return null;
             }
 
-            // İnsansı gecikme
             yield return _aiDelay;
 
             if (aiTask.Result != null)
@@ -463,25 +444,39 @@ namespace Chess.Unity.Managers
 
             if (_currentGameState == GameState.Checkmate)
             {
-                HapticsManager.Instance.VibrateHeavy(); // MAT = AĞIR TİTREŞİM
+                HapticsManager.Instance.VibrateHeavy();
                 AudioManager.Instance.PlayGameOver();
                 
                 string winnerName = (_board.Turn == PieceColor.White) ? "BLACK" : "WHITE";
                 _uiManager.ShowGameOver($"{winnerName} WINS!");
+                
+                SaveManager.DeleteSave(GameSettings.CurrentMode);
+            }
+            else if (_currentGameState == GameState.Draw)
+            {
+                HapticsManager.Instance.VibrateHeavy();
+                AudioManager.Instance.PlayGameOver();
+
+                string reason = "(Draw)";
+                if (Arbiter.IsThreefoldRepetition(_board)) reason = "(3-Fold Repetition)";
+                else if (Arbiter.IsDrawByFiftyMoveRule(_board)) reason = "(50-Move Rule)";
+
+                _uiManager.ShowGameOver($"GAME DRAWN\n{reason}");
+                SaveManager.DeleteSave(GameSettings.CurrentMode);
             }
             else if (_currentGameState == GameState.Stalemate)
             {
-                HapticsManager.Instance.VibrateHeavy(); // PAT = AĞIR TİTREŞİM
+                HapticsManager.Instance.VibrateHeavy();
                 AudioManager.Instance.PlayGameOver();
                 
                 _uiManager.ShowGameOver("GAME DRAWN\n(Stalemate)");
+                SaveManager.DeleteSave(GameSettings.CurrentMode);
             }
             else
             {
-                // OYUN SÜRÜYOR: ŞAH ÇEKİLDİ Mİ?
                 if (Arbiter.IsInCheck(_board, _board.Turn))
                 {
-                    HapticsManager.Instance.VibrateMedium(); // ŞAH = UYARI TİTREŞİMİ
+                    HapticsManager.Instance.VibrateMedium();
                     AudioManager.Instance.PlayNotify();
                 }
             }
@@ -489,7 +484,6 @@ namespace Chess.Unity.Managers
 
         public void SetPaused(bool paused)
         {
-            // Pause mantığı genişletilebilir
             _isAIThinking = paused; 
         }
 
@@ -499,31 +493,24 @@ namespace Chess.Unity.Managers
 
         public void UndoMove()
         {
-            // 1. Güvenlik Kontrolleri
             if (_currentGameState != GameState.InProgress || _isAIThinking || _isPromotionActive || _isPaused) return;
 
-            // 2. Mod Kontrolü
             if (GameSettings.CurrentMode == GameMode.HumanVsAI)
             {
-                // AI Modu: Eğer sıra BEYAZ'daysa (yani AI oynamış ve sıra bize geçmişse),
-                // "Son Hamleyi Geri Al" demek, hem AI'yı hem Bizi geri al demektir.
-                // Böylece tekrar oynama sırası bize geçer.
                 if (_board.Turn == PieceColor.White && _commandHistory.Count >= 2)
                 {
-                    PerformUndo(); // AI'nın hamlesini geri al
-                    PerformUndo(); // Bizim hamlemizi geri al
+                    PerformUndo(); 
+                    PerformUndo(); 
                 }
             }
             else
             {
-                // Arkadaş Modu: Sadece tek bir hamle geri al.
                 if (_commandHistory.Count > 0)
                 {
                     PerformUndo();
                 }
             }
 
-            // --- AUTO SAVE (Undo sonrası güncelle) ---
             SaveCurrentGame();
         }
 
@@ -531,36 +518,19 @@ namespace Chess.Unity.Managers
         {
             if (_commandHistory.Count == 0) return;
 
-            // 1. Komutu Çıkar
             ICommand lastCmd = _commandHistory.Pop();
-            MoveCommand moveCmd = lastCmd as MoveCommand; // Verilere erişmek için cast ediyoruz
+            MoveCommand moveCmd = lastCmd as MoveCommand; 
 
-            // 2. Mantıksal Geri Alma (Board Logic)
             lastCmd.Undo();
-
-            // 3. Görsel Geri Alma (Board Visual)
-            // En temiz yöntem: Tahtayı o anki duruma göre yeniden çizmek.
-            // (Optimize edilmiş BoardView sayesinde bu işlem çok hızlıdır)
             RefreshBoardVisuals();
 
-            // 4. Yenen Taşlar UI Güncellemesi
             if (moveCmd != null && moveCmd.CapturedPiece.Type != PieceType.None)
             {
-                // Eğer bu hamlede taş yendiyse, UI'dan sil.
                 _capturedPiecesUI.RemoveLastCapturedPiece(moveCmd.CapturedPiece.Color);
             }
 
-            // 5. Ses
-            // Geri alma sesi çalabiliriz veya sessiz olabilir. Şimdilik sessiz.
-
-            // 6. Sarı Çerçeveleri (Last Move) Güncelle
-            // Bir önceki hamlenin sarı çerçevesini göstermek için geçmişe bak
             if (_commandHistory.Count > 0)
             {
-                // Bir önceki hamleyi bul ama stack'ten çıkarma (Peek)
-                // Not: Stack ICommand tutuyor, MoveCommand olduğunu varsayıyoruz.
-                // Detaylı görselleştirme için MoveCommand içine "public To/From" eklememiz gerekebilir.
-                // Şimdilik sarı çerçeveyi gizleyelim, kafa karıştırmasın.
                 _boardView.HideLastMoveHighlights();
             }
             else
@@ -568,9 +538,8 @@ namespace Chess.Unity.Managers
                 _boardView.HideLastMoveHighlights();
             }
             
-            // Oyun durumu devam ediyor (Mat olmuşsa bile geri alınca devam eder)
             _currentGameState = GameState.InProgress;
-            _uiManager.HideGameOver(); // Oyun bittiyse paneli kapat
+            _uiManager.HideGameOver();
         }
 
         private void RefreshBoardVisuals()
@@ -594,25 +563,18 @@ namespace Chess.Unity.Managers
 
         private void SaveCurrentGame()
         {
-            if (_currentGameState == GameState.Checkmate || _currentGameState == GameState.Stalemate)
-            {
-                SaveManager.DeleteSave(GameSettings.CurrentMode); // GÜNCELLENDİ: Parametre eklendi
-                return;
-            }
+            if (_currentGameState != GameState.InProgress) return;
 
-            // Command Stack (LIFO) -> List (Chronological)
-            // Stack'i Array yapınca ters sıra gelir (En son yapılan hamle [0] olur).
-            // Replay için ESKİDEN YENİYE sıralamalıyız.
             ICommand[] stackArray = _commandHistory.ToArray();
             List<MoveRecord> historyList = new List<MoveRecord>();
 
-            // Tersten döngü (En eskiden en yeniye)
             for (int i = stackArray.Length - 1; i >= 0; i--)
             {
                 MoveCommand cmd = stackArray[i] as MoveCommand;
                 if (cmd != null)
                 {
-                    historyList.Add(new MoveRecord(cmd.From, cmd.To, cmd.PromotionType));
+                    // --- GÜNCELLENDİ: Notation Parametresi Eklendi ---
+                    historyList.Add(new MoveRecord(cmd.From, cmd.To, cmd.PromotionType, cmd.Notation));
                 }
             }
 
@@ -621,10 +583,10 @@ namespace Chess.Unity.Managers
                 InitialFen = _initialFen,
                 CurrentMode = GameSettings.CurrentMode,
                 MoveHistory = historyList,
-                
-                // SÜRELERİ EKLİYORUZ
                 WhiteTimeRemaining = _whiteTime,
-                BlackTimeRemaining = _blackTime
+                BlackTimeRemaining = _blackTime,
+                HalfMoveClock = _board.HalfMoveClock,
+                FullMoveNumber = _board.FullMoveNumber
             };
             SaveManager.Save(data);
         }
@@ -633,32 +595,26 @@ namespace Chess.Unity.Managers
 
         public void TogglePause()
         {
-            // Oyun bitmişse durdurmaya gerek yok
             if (_currentGameState != GameState.InProgress) return;
 
             _isPaused = !_isPaused;
 
             if (_isPaused)
             {
-                Time.timeScale = 0f; // ZAMANI DURDUR (Animasyonlar, Coroutine'ler durur)
+                Time.timeScale = 0f; 
                 _uiManager.ShowPause();
             }
             else
             {
-                Time.timeScale = 1f; // ZAMANI AKIT
+                Time.timeScale = 1f; 
                 _uiManager.HidePause();
             }
         }
 
         public void ReturnToMainMenu()
         {
-            // 1. Zamanı normale döndür (Çok önemli!)
             Time.timeScale = 1f;
-            
-            // 2. Oyunu Kaydet (Çıkarken son durum kalsın)
             SaveCurrentGame();
-            
-            // 3. Menü Sahnesine Geç
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         }
 

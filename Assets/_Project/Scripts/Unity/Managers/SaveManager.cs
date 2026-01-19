@@ -6,10 +6,8 @@ namespace Chess.Unity.Managers
 {
     public static class SaveManager
     {
-        // ARTIK SABİT BİR İSİM YOK. MODA GÖRE ÜRETİLİYOR.
         private static string GetSavePath(GameMode mode)
         {
-            // Örnek: .../persistentDataPath/save_HumanVsAI.json
             return Path.Combine(Application.persistentDataPath, $"save_{mode}.json");
         }
 
@@ -17,12 +15,11 @@ namespace Chess.Unity.Managers
         {
             try
             {
-                // Hangi moddaysak o dosya ismini al
                 string path = GetSavePath(data.CurrentMode);
-                
                 string json = JsonUtility.ToJson(data, true);
                 File.WriteAllText(path, json);
-                Debug.Log($"Game Saved ({data.CurrentMode}) to: {path}");
+                // Log kalabalığı yapmasın diye commentledim, istersen açabilirsin
+                // Debug.Log($"Game Saved ({data.CurrentMode}) to: {path}");
             }
             catch (System.Exception e)
             {
@@ -30,7 +27,6 @@ namespace Chess.Unity.Managers
             }
         }
 
-        // Load metodu artık "Hangi modu yükleyeyim?" diye sormalı
         public static SaveData Load(GameMode mode)
         {
             string path = GetSavePath(mode);
@@ -52,7 +48,6 @@ namespace Chess.Unity.Managers
         public static void DeleteSave(GameMode mode)
         {
             string path = GetSavePath(mode);
-            
             if (File.Exists(path))
             {
                 File.Delete(path);
