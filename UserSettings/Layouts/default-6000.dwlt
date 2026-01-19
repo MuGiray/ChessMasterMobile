@@ -218,8 +218,8 @@ MonoBehaviour:
     y: 0
     width: 1220
     height: 660
-  m_MinSize: {x: 200, y: 200}
-  m_MaxSize: {x: 4000, y: 4000}
+  m_MinSize: {x: 202, y: 226}
+  m_MaxSize: {x: 4002, y: 4026}
   m_ActualView: {fileID: 18}
   m_Panes:
   - {fileID: 15}
@@ -272,8 +272,8 @@ MonoBehaviour:
     y: 0
     width: 401
     height: 924
-  m_MinSize: {x: 275, y: 50}
-  m_MaxSize: {x: 4000, y: 4000}
+  m_MinSize: {x: 276, y: 76}
+  m_MaxSize: {x: 4001, y: 4026}
   m_ActualView: {fileID: 17}
   m_Panes:
   - {fileID: 17}
@@ -300,8 +300,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "UnityEditor.MainToolbarWindow\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1
-    y: 51
+    x: 0
+    y: 0
     width: 1918
     height: 36
   m_SerializedDataModeController:
@@ -618,8 +618,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Hierarchy\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1
-    y: 87
+    x: 0
+    y: 24
     width: 296
     height: 634
   m_SerializedDataModeController:
@@ -1407,8 +1407,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Project\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1
-    y: 747
+    x: 0
+    y: 684
     width: 1516
     height: 238
   m_SerializedDataModeController:
@@ -1459,6 +1459,11 @@ MonoBehaviour:
       m_Data: 49860
     m_ExpandedIDs:
     - m_Data: 0
+    - m_Data: 49436
+    - m_Data: 49438
+    - m_Data: 49440
+    - m_Data: 49442
+    - m_Data: 49444
     - m_Data: 49446
     - m_Data: 49448
     - m_Data: 49450
@@ -1467,12 +1472,6 @@ MonoBehaviour:
     - m_Data: 49456
     - m_Data: 49458
     - m_Data: 49460
-    - m_Data: 49462
-    - m_Data: 49464
-    - m_Data: 49466
-    - m_Data: 49468
-    - m_Data: 49470
-    - m_Data: 1000000000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1505,6 +1504,11 @@ MonoBehaviour:
       m_Data: 0
     m_ExpandedIDs:
     - m_Data: 0
+    - m_Data: 49436
+    - m_Data: 49438
+    - m_Data: 49440
+    - m_Data: 49442
+    - m_Data: 49444
     - m_Data: 49446
     - m_Data: 49448
     - m_Data: 49450
@@ -1513,11 +1517,6 @@ MonoBehaviour:
     - m_Data: 49456
     - m_Data: 49458
     - m_Data: 49460
-    - m_Data: 49462
-    - m_Data: 49464
-    - m_Data: 49466
-    - m_Data: 49468
-    - m_Data: 49470
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1602,7 +1601,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 1518
-    y: 87
+    y: 24
     width: 400
     height: 898
   m_SerializedDataModeController:
@@ -1653,7 +1652,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 298
-    y: 87
+    y: 24
     width: 1218
     height: 634
   m_SerializedDataModeController:
@@ -1685,7 +1684,7 @@ MonoBehaviour:
   m_UseMipMap: 0
   m_SimulatorState:
     controlPanelVisible: 0
-    controlPanelWidth: 0
+    controlPanelWidth: NaN
     controlPanelFoldoutKeys:
     - UnityEditor.AdaptivePerformance.Editor.AdaptivePerformanceUIExtension
     - UnityEditor.DeviceSimulation.ApplicationSettingsPlugin
