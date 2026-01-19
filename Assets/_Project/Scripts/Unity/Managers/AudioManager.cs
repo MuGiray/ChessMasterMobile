@@ -1,39 +1,71 @@
 using UnityEngine;
+using Chess.Core.Models; // GameSettings'i görmesi için ŞART
 
 namespace Chess.Unity.Managers
 {
-    [RequireComponent(typeof(AudioSource))]
     public class AudioManager : MonoBehaviour
     {
         public static AudioManager Instance { get; private set; }
 
         [Header("Audio Clips")]
-        [SerializeField] private AudioClip _moveSound;
-        [SerializeField] private AudioClip _captureSound;
-        [SerializeField] private AudioClip _notifySound;
-        [SerializeField] private AudioClip _gameOverSound;
+        [SerializeField] private AudioClip _moveClip;
+        [SerializeField] private AudioClip _captureClip;
+        [SerializeField] private AudioClip _notifyClip;
+        [SerializeField] private AudioClip _gameOverClip;
 
-        private AudioSource _source;
+        private AudioSource _audioSource;
 
         private void Awake()
         {
-            if (Instance != null && Instance != this) 
-            { 
-                Destroy(gameObject); 
-                return; 
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
             }
             Instance = this;
-            _source = GetComponent<AudioSource>();
+            
+            // GlobalManagers altında olduğu için DontDestroyOnLoad gerekebilir veya parent halleder.
+            // Zaten GlobalManagers yapısında olduğu için elle DontDestroy'a gerek yok.
+            
+            _audioSource = GetComponent<AudioSource>();
+            if (_audioSource == null)
+            {
+                _audioSource = gameObject.AddComponent<AudioSource>();
+            }
         }
-
-        public void PlayMove() => PlayClip(_moveSound);
-        public void PlayCapture() => PlayClip(_captureSound);
-        public void PlayNotify() => PlayClip(_notifySound);
-        public void PlayGameOver() => PlayClip(_gameOverSound);
 
         private void PlayClip(AudioClip clip)
         {
-            if (clip != null) _source.PlayOneShot(clip);
+            if (clip != null && _audioSource != null)
+            {
+                _audioSource.PlayOneShot(clip);
+            }
+        }
+
+        // --- GÜNCELLENEN METODLAR (AYAR KONTROLLÜ) ---
+
+        public void PlayMove()
+        {
+            if (!GameSettings.SfxEnabled) return;
+            PlayClip(_moveClip);
+        }
+
+        public void PlayCapture()
+        {
+            if (!GameSettings.SfxEnabled) return;
+            PlayClip(_captureClip);
+        }
+
+        public void PlayNotify()
+        {
+            if (!GameSettings.SfxEnabled) return;
+            PlayClip(_notifyClip);
+        }
+
+        public void PlayGameOver()
+        {
+            if (!GameSettings.SfxEnabled) return;
+            PlayClip(_gameOverClip);
         }
     }
 }

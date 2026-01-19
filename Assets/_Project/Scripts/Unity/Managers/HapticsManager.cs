@@ -1,4 +1,5 @@
 using UnityEngine;
+using Chess.Core.Models; // GameSettings için ŞART
 
 namespace Chess.Unity.Managers
 {
@@ -8,56 +9,69 @@ namespace Chess.Unity.Managers
 
         private void Awake()
         {
-            if (Instance == null)
-            {
-                Instance = this;
-                DontDestroyOnLoad(gameObject);
-            }
-            else
+            if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
+                return;
             }
+            Instance = this;
         }
 
-        // --- PUBLIC API ---
+        // --- TİTREŞİM FONKSİYONLARI (AYAR KONTROLLÜ) ---
 
-        // 1. Hafif (Normal Hamle): 20ms
-        public void VibrateLight() => VibrateAndroid(20);
-
-        // 2. Orta (Taş Yeme / Şah / Tuş Sesi): 50ms
-        public void VibrateMedium() => VibrateAndroid(50);
-
-        // 3. Ağır (Mat / Oyun Sonu): 100ms
-        public void VibrateHeavy() => VibrateAndroid(100);
-
-        // 4. Hata (Geçersiz Hamle): 30ms
-        public void VibrateError() => VibrateAndroid(30);
-
-
-        // --- ANDROID NATIVE KÖPRÜSÜ ---
-        private void VibrateAndroid(long milliseconds)
+        public void VibrateLight()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                // Unity'nin ana aktivitesine (Current Activity) eriş
-                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
-                using (AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
-                using (AndroidJavaObject vibrator = currentActivity.Call<AndroidJavaObject>("getSystemService", "vibrator"))
-                {
-                    // Cihazın titreşimi var mı?
-                    if (vibrator.Call<bool>("hasVibrator"))
-                    {
-                        // Titret (Milisaniye cinsinden)
-                        vibrator.Call("vibrate", milliseconds);
-                    }
-                }
-            }
-            catch (System.Exception)
-            {
-                // Hata olursa oyunu durdurma, sessizce geç
-            }
-#endif
+            if (!GameSettings.HapticsEnabled) return;
+
+            #if UNITY_ANDROID && !UNITY_EDITOR
+            // Android için basit titreşim (veya Handheld.Vibrate)
+            // Daha gelişmişi için Android native çağrıları gerekir ama MVP için bu yeterli.
+            // Unity'nin eski sistemi sadece tek tip destekler:
+            Handheld.Vibrate(); 
+            #else
+            Debug.Log("Haptic: Light");
+            #endif
+        }
+
+        public void VibrateMedium()
+        {
+            if (!GameSettings.HapticsEnabled) return;
+
+            #if UNITY_ANDROID && !UNITY_EDITOR
+            Handheld.Vibrate();
+            #else
+            Debug.Log("Haptic: Medium");
+            #endif
+        }
+
+        public void VibrateHeavy()
+        {
+            if (!GameSettings.HapticsEnabled) return;
+
+            #if UNITY_ANDROID && !UNITY_EDITOR
+            Handheld.Vibrate();
+            #else
+            Debug.Log("Haptic: Heavy");
+            #endif
+        }
+
+        public void VibrateError()
+        {
+            if (!GameSettings.HapticsEnabled) return;
+
+            #if UNITY_ANDROID && !UNITY_EDITOR
+            // Hata için peş peşe 2 kez titreşim simülasyonu
+            StartCoroutine(VibratePattern());
+            #else
+            Debug.Log("Haptic: Error");
+            #endif
+        }
+
+        private System.Collections.IEnumerator VibratePattern()
+        {
+            Handheld.Vibrate();
+            yield return new WaitForSeconds(0.1f);
+            Handheld.Vibrate();
         }
     }
 }
